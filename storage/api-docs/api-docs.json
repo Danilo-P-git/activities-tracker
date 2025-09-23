@@ -1,0 +1,626 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "My First API",
+        "version": "0.1"
+    },
+    "paths": {
+        "/api/events": {
+            "get": {
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Lista di tutti gli eventi",
+                "operationId": "7058ab7c89d20c752b6afd6d808f6526",
+                "responses": {
+                    "200": {
+                        "description": "Successo"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Crea un nuovo evento",
+                "operationId": "508895e03d7f10edac84357084c87b20",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Event"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Creato"
+                    }
+                }
+            }
+        },
+        "/api/events/{id}": {
+            "get": {
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Mostra un evento",
+                "operationId": "6f743f71f7a88dbe57be1d9c9ebf47cb",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successo"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Aggiorna un evento",
+                "operationId": "fb130dcf1ab4d7abbd3a173741df1f8f",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Event"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Aggiornato"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Elimina un evento",
+                "operationId": "b8c8f4b41a32532f5e9f7146e511bc61",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Eliminato"
+                    }
+                }
+            }
+        },
+        "/api/event-group-staff": {
+            "post": {
+                "tags": [
+                    "EventGroupStaff"
+                ],
+                "summary": "Crea una relazione evento-gruppo-staff",
+                "operationId": "d7a88686832160194b4693162b265141",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "event_id",
+                                    "group_id",
+                                    "staff_id"
+                                ],
+                                "properties": {
+                                    "event_id": {
+                                        "type": "integer"
+                                    },
+                                    "group_id": {
+                                        "type": "integer"
+                                    },
+                                    "staff_id": {
+                                        "type": "integer"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Creato"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "EventGroupStaff"
+                ],
+                "summary": "Elimina una relazione evento-gruppo-staff",
+                "operationId": "7a4a20f8e5fa1a38e099903c98770b40",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "event_id",
+                                    "group_id",
+                                    "staff_id"
+                                ],
+                                "properties": {
+                                    "event_id": {
+                                        "type": "integer"
+                                    },
+                                    "group_id": {
+                                        "type": "integer"
+                                    },
+                                    "staff_id": {
+                                        "type": "integer"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "description": "Eliminato"
+                    }
+                }
+            }
+        },
+        "/api/event-group-staff/assign": {
+            "post": {
+                "tags": [
+                    "EventGroupStaff"
+                ],
+                "summary": "Assegna uno staff a una coppia evento-gruppo già esistente",
+                "operationId": "a739ab9685af828905dec225546bc2fe",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "event_id",
+                                    "group_id",
+                                    "staff_id"
+                                ],
+                                "properties": {
+                                    "event_id": {
+                                        "type": "integer"
+                                    },
+                                    "group_id": {
+                                        "type": "integer"
+                                    },
+                                    "staff_id": {
+                                        "type": "integer"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successo"
+                    },
+                    "404": {
+                        "description": "Nessuna relazione evento-gruppo trovata senza staff."
+                    }
+                }
+            }
+        },
+        "/api/groups": {
+            "get": {
+                "tags": [
+                    "Groups"
+                ],
+                "summary": "Lista di tutti i gruppi",
+                "operationId": "f286cbf34dc4be32a94459a335658168",
+                "responses": {
+                    "200": {
+                        "description": "Successo"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Groups"
+                ],
+                "summary": "Crea un nuovo gruppo",
+                "operationId": "74e9878763e20c38ae5c9930b8d2d3f6",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Group"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Creato"
+                    }
+                }
+            }
+        },
+        "/api/groups/{id}": {
+            "get": {
+                "tags": [
+                    "Groups"
+                ],
+                "summary": "Mostra un gruppo",
+                "operationId": "38a1f4990d0dc69ead7f7377ad016117",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successo"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Groups"
+                ],
+                "summary": "Aggiorna un gruppo",
+                "operationId": "f6aca8def1d24d74f3f6bdc6fda8d84e",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Group"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Aggiornato"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Groups"
+                ],
+                "summary": "Elimina un gruppo",
+                "operationId": "8c693e934c350f47618655bc71886930",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Eliminato"
+                    }
+                }
+            }
+        },
+        "/api/staff": {
+            "get": {
+                "tags": [
+                    "Staff"
+                ],
+                "summary": "Lista di tutto lo staff",
+                "operationId": "a9eb94a978618740b62aa58538ee1785",
+                "responses": {
+                    "200": {
+                        "description": "Successo"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Staff"
+                ],
+                "summary": "Crea un nuovo membro dello staff",
+                "operationId": "06a6bc7e0f0ffe4c19f67b8d70b58928",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Staff"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Creato"
+                    }
+                }
+            }
+        },
+        "/api/staff/{id}": {
+            "get": {
+                "tags": [
+                    "Staff"
+                ],
+                "summary": "Mostra un membro dello staff",
+                "operationId": "97c1bbd48e5834aab3b87b709f2ef517",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successo"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Staff"
+                ],
+                "summary": "Aggiorna un membro dello staff",
+                "operationId": "de68b1f20368fb2ad9466d2926618309",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Staff"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Aggiornato"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Staff"
+                ],
+                "summary": "Elimina un membro dello staff",
+                "operationId": "3ef08e772902ed79669f197dce0f86a3",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Eliminato"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Event": {
+                "required": [
+                    "event_name",
+                    "event_date"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "event_name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "event_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "location": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "deleted_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "Group": {
+                "required": [
+                    "group_name",
+                    "number_of_people",
+                    "start_date",
+                    "end_date"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "group_name": {
+                        "type": "string"
+                    },
+                    "number_of_people": {
+                        "type": "integer"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "deleted_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "Staff": {
+                "required": [
+                    "full_name",
+                    "is_available",
+                    "is_busy"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "full_name": {
+                        "type": "string"
+                    },
+                    "is_available": {
+                        "type": "string"
+                    },
+                    "is_busy": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "deleted_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Events",
+            "description": "API per la gestione degli eventi"
+        },
+        {
+            "name": "EventGroupStaff",
+            "description": "API per la gestione delle relazioni tra eventi, gruppi e staff"
+        },
+        {
+            "name": "Groups",
+            "description": "API per la gestione dei gruppi"
+        },
+        {
+            "name": "Staff",
+            "description": "API per la gestione dello staff"
+        }
+    ]
+}
