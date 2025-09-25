@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import MenuBar from '../components/MenuBar';
 import { ChevronDownIcon } from '@heroicons/react/24/solid';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
 
 type EventType = {
   id: number;

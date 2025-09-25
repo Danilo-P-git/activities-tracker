@@ -23,6 +23,7 @@ class StoreGroupRequest extends FormRequest
             'date' => 'required|date',
             'activity_duration' => 'nullable|integer|min:1',
             'is_friend' => 'boolean',
+            'is_kid' => 'nullable|boolean',
         ];
     }
 

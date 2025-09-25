@@ -34,11 +34,13 @@ class Group extends Model
         'date',
         'activity_duration',
         'is_friend',
+        'is_kid',
     ];
 
     protected $casts = [
         'is_waiting' => 'boolean',
         'is_closed' => 'boolean',
+        'is_kid' => 'boolean',
     ];
 
     public function event()

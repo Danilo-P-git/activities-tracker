@@ -63,7 +63,7 @@ function EventInfoModal({ open, onClose, event, onEdit }: { open: boolean; onClo
   const [staff, setStaff] = useState<StaffType[]>([]);
   useEffect(() => {
     if (open && event?.id) {
-      axios.get(`/api/events/${event.id}`).then(res => {
+      axios.get(`/api/events/${event.id}`, { withCredentials: true }).then(res => {
         setStaff(res.data.staff || []);
       });
     } else {
@@ -225,7 +225,7 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
 
   useEffect(() => {
     if (open) {
-      axios.get('/api/staff').then(res => {
+      axios.get('/api/staff', { withCredentials: true }).then(res => {
         setStaffList(res.data);
       });
     }
@@ -246,9 +246,9 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
       const payload = { ...form, staff_ids: form.staff_ids };
       let res;
       if (editMode && event) {
-        res = await axios.put(`/api/events/${event.id}`, payload);
+        res = await axios.put(`/api/events/${event.id}`, payload, { withCredentials: true });
       } else {
-        res = await axios.post('/api/events', payload);
+        res = await axios.post('/api/events', payload, { withCredentials: true });
       }
       onAdd(res.data);
       onClose();
@@ -374,22 +374,22 @@ export default function EventListPage() {
   const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
-    axios.get('/api/events/featured').then(res => setFeaturedEvents(Array.isArray(res.data) ? res.data : []));
+    axios.get('/api/events/featured', { withCredentials: true }).then(res => setFeaturedEvents(Array.isArray(res.data) ? res.data : []));
   }, []);
 
   useEffect(() => {
     const params: Record<string, string> = {};
     if (filter) params.filter = filter;
     if (sortBy) params.sortBy = sortBy;
-    axios.get('/api/events', { params }).then(res => setEvents(res.data));
+    axios.get('/api/events', { params, withCredentials: true }).then(res => setEvents(res.data));
   }, [filter, sortBy]);
 
   function refreshEventsAndFeatured() {
     const params: Record<string, string> = {};
     if (filter) params.filter = filter;
     if (sortBy) params.sortBy = sortBy;
-    axios.get('/api/events', { params }).then(res => setEvents(res.data));
-    axios.get('/api/events/featured').then(res => setFeaturedEvents(Array.isArray(res.data) ? res.data : []));
+    axios.get('/api/events', { params, withCredentials: true }).then(res => setEvents(res.data));
+    axios.get('/api/events/featured', { withCredentials: true }).then(res => setFeaturedEvents(Array.isArray(res.data) ? res.data : []));
   }
 
   function handleAdd() {
@@ -406,7 +406,7 @@ export default function EventListPage() {
   async function handleEdit() {
     if (selectedEvent) {
       // Recupera dati freschi dell'evento (inclusi staff e periods aggiornati)
-      const res = await axios.get(`/api/events/${selectedEvent.id}`);
+      const res = await axios.get(`/api/events/${selectedEvent.id}`, { withCredentials: true });
       setSelectedEvent(res.data);
     }
     setEditMode(true);

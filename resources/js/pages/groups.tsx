@@ -20,6 +20,7 @@ type GroupType = {
   date: string;
   activity_duration: number | null;
   is_friend: boolean;
+  is_kid?: boolean;
   staff_id: number | null;
   staff?: StaffType;
   created_at?: string;
@@ -59,6 +60,7 @@ const GroupTimer: React.FC<{ group: GroupType }> = ({ group }) => {
   }
 };
 
+// Stato configurazione globale
 const DEFAULT_DURATION = 5;
 
 
@@ -74,19 +76,23 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
     event_start_date?: string;
     event_end_date?: string;
   } | null>(null);
+  // Stato configurazione globale
+  const [config, setConfig] = useState<{ durata_media_gruppo?: number; gruppi_contemporanei_possibili?: number } | null>(null);
   // Imposta la data di default a oggi (YYYY-MM-DD)
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const dd = String(today.getDate()).padStart(2, '0');
   const defaultDate = `${yyyy}-${mm}-${dd}`;
+  // Form state, activity_duration predefinito da config
   const [form, setForm] = useState({
     group_name: '',
     number_of_people: 1,
     description: '',
     date: defaultDate,
-    activity_duration: DEFAULT_DURATION,
+    activity_duration: undefined as number | undefined,
     is_friend: false,
+    is_kid: false,
     staff_id: null as number | null,
   });
   const [showForm, setShowForm] = useState(false);
@@ -97,9 +103,9 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
 
   useEffect(() => {
     fetchGroups();
-    axios.get(`/api/groups/closed`, { params: { event_id: eventId } }).then(res => setClosedGroups(res.data));
+    axios.get(`/api/groups/closed`, { params: { event_id: eventId }, withCredentials: true }).then(res => setClosedGroups(res.data));
     // Recupera info evento e staff associato (solo per info evento)
-    axios.get(`/api/events/${eventId}`).then(res => {
+    axios.get(`/api/events/${eventId}`, { withCredentials: true }).then(res => {
       const eventStaff = res.data.staff || [];
       setEventStaffIds(eventStaff.map((s: any) => s.id));
       setEventInfo({
@@ -123,17 +129,29 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
       }
     });
     // Recupera staff dell'evento (anche non disponibili) SOLO per la tabella staff evento
-    axios.get(`/api/events/${eventId}/staff`).then(res => setEventStaffList(res.data));
+    axios.get(`/api/events/${eventId}/staff`, { withCredentials: true }).then(res => setEventStaffList(res.data));
     // Recupera tutti gli staff (per selezione gruppi)
-    axios.get('/api/staff').then(res => setStaffList(res.data));
+    axios.get('/api/staff', { withCredentials: true }).then(res => setStaffList(res.data));
+    // Recupera configurazione globale
+    axios.get('/api/configurazione', { withCredentials: true }).then(res => {
+      setConfig({
+        durata_media_gruppo: Number(res.data.durata_media_gruppo) || undefined,
+        gruppi_contemporanei_possibili: Number(res.data.gruppi_contemporanei_possibili) || undefined,
+      });
+      // Se non è stato ancora impostato un valore di durata, usalo come default
+      setForm(f => ({ ...f, activity_duration: f.activity_duration ?? (Number(res.data.durata_media_gruppo) || DEFAULT_DURATION) }));
+    });
   }, [eventId]);
 
   function fetchGroups() {
-    axios.get('/api/groups', { params: { event_id: eventId } }).then(res => setGroups(res.data));
+    axios.get('/api/groups', { params: { event_id: eventId }, withCredentials: true }).then(res => setGroups(res.data));
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm({ ...form, [e.target.name]: e.target.type === 'number' ? Number(e.target.value) : e.target.value });
+  }
+  function handleIsKidChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setForm(f => ({ ...f, is_kid: e.target.checked }));
   }
 
   function handleStaffChange(selected: number | null) {
@@ -166,7 +184,7 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
         activity_duration: form.is_friend ? null : form.activity_duration,
         event_id: eventId,
       };
-      await axios.post('/api/groups', payload);
+      await axios.post('/api/groups', payload, { withCredentials: true });
       setShowForm(false);
       setForm({
         group_name: '',
@@ -175,6 +193,7 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
         date: defaultDate,
         activity_duration: DEFAULT_DURATION,
         is_friend: false,
+        is_kid: false,
         staff_id: null,
       });
       fetchGroups();
@@ -190,8 +209,12 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
     }
   }
 
+  // Separa gruppi in attesa e in corso
+  const waitingGroups = groups.filter(g => g.is_waiting && !g.is_closed);
+  const activeGroups = groups.filter(g => !g.is_waiting && !g.is_closed);
+
   return (
-    <div className="bg-card p-4 md:p-8 rounded-2xl shadow-lg border border-border max-w-3xl mx-auto mt-8">
+    <div className="bg-card p-4 md:p-8 rounded-2xl shadow-lg border border-border w-full max-w-6xl mx-auto mt-8" style={{ minWidth: '80vw' }}>
       {/* Card evento in alto */}
       {eventInfo && (
         <div className="mb-6 bg-primary/10 border border-primary rounded-xl px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
@@ -254,9 +277,9 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                       type="checkbox"
                       checked={staff.is_available === true || staff.is_available === '1' || staff.is_available === 1}
                       onChange={async e => {
-                        await axios.put(`/api/staff/${staff.id}`, { is_available: e.target.checked ? 1 : 0 });
+                        await axios.put(`/api/staff/${staff.id}`, { is_available: e.target.checked ? 1 : 0 }, { withCredentials: true });
                         // Aggiorna solo la lista staff evento
-                        axios.get(`/api/events/${eventId}/staff`).then(res => setEventStaffList(res.data));
+                        axios.get(`/api/events/${eventId}/staff`, { withCredentials: true }).then(res => setEventStaffList(res.data));
                       }}
                     />
                   </td>
@@ -297,14 +320,29 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
               <label className="block text-sm font-medium mb-1">Data</label>
               <input type="date" name="date" value={form.date} onChange={handleChange} required className="block w-full border border-border bg-background text-foreground rounded-lg p-2 focus:ring-2 focus:ring-secondary focus:outline-none placeholder-muted-foreground" />
             </div>
-            <div className="flex items-center gap-2 md:col-span-2">
-              <input type="checkbox" id="isFriend" checked={form.is_friend} onChange={handleIsFriendChange} />
-              <label htmlFor="isFriend" className="text-sm">Amico (durata indefinita)</label>
+            <div className="flex items-center gap-6 md:col-span-2">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="isFriend" checked={form.is_friend} onChange={handleIsFriendChange} />
+                <label htmlFor="isFriend" className="text-sm">Amico (durata indefinita)</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="isKid" checked={form.is_kid} onChange={handleIsKidChange} />
+                <label htmlFor="isKid" className="text-sm">Gruppo di bambini</label>
+              </div>
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">Durata attività (minuti)</label>
-              <input type="range" min={5} max={30} step={5} value={form.activity_duration ?? DEFAULT_DURATION} onChange={handleDurationChange} disabled={form.is_friend} className="w-full" />
-              <div className="text-xs text-gray-600 mt-1">{form.is_friend ? 'Indefinita' : `${form.activity_duration} minuti`}</div>
+              <label className="block text-sm font-medium mb-1">Durata attività (minuti)
+                {config?.durata_media_gruppo && (
+                  <span className="ml-2 text-xs text-muted-foreground">(suggerito: {config.durata_media_gruppo} min)</span>
+                )}
+              </label>
+              <input type="range" min={5} max={30} step={5} value={form.activity_duration ?? (config?.durata_media_gruppo ?? DEFAULT_DURATION)} onChange={handleDurationChange} disabled={form.is_friend} className="w-full" />
+              <div className="text-xs text-gray-600 mt-1">
+                {form.is_friend ? 'Indefinita' : `${form.activity_duration ?? (config?.durata_media_gruppo ?? DEFAULT_DURATION)} minuti`}
+                {config?.durata_media_gruppo && (
+                  <span className="ml-2 text-muted-foreground">(configurazione globale)</span>
+                )}
+              </div>
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium mb-1">Staff associato</label>
@@ -359,26 +397,51 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
           </div>
         </form>
       )}
-      <div>
-        <h3 className="text-lg font-bold text-primary mb-4">Gruppi esistenti</h3>
-        {groups.length === 0 ? (
-          <div className="text-muted-foreground italic">Nessun gruppo creato</div>
-        ) : (
-          <ul className="space-y-4">
-            {groups.map(group => (
-              <GroupListItem
-                key={group.id}
-                group={group}
-                staffList={staffList}
-                eventStaffIds={eventStaffIds}
-                fetchGroups={fetchGroups}
-                fetchClosedGroups={() => axios.get(`/api/groups/closed`, { params: { event_id: eventId } }).then(res => setClosedGroups(res.data))}
-                eventId={eventId}
-                eventInfo={eventInfo}
-              />
-            ))}
-          </ul>
-        )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Gruppi in attesa */}
+        <div>
+          <h3 className="text-lg font-bold text-yellow-700 mb-4">Gruppi in attesa</h3>
+          {waitingGroups.length === 0 ? (
+            <div className="text-muted-foreground italic">Nessun gruppo in attesa</div>
+          ) : (
+            <ul className="space-y-4">
+              {waitingGroups.map(group => (
+                <GroupListItem
+                  key={group.id}
+                  group={group}
+                  staffList={staffList}
+                  eventStaffIds={eventStaffIds}
+                  fetchGroups={fetchGroups}
+                  fetchClosedGroups={() => axios.get(`/api/groups/closed`, { params: { event_id: eventId }, withCredentials: true }).then(res => setClosedGroups(res.data))}
+                  eventId={eventId}
+                  eventInfo={eventInfo}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+        {/* Gruppi in corso */}
+        <div>
+          <h3 className="text-lg font-bold text-green-700 mb-4">Gruppi in corso</h3>
+          {activeGroups.length === 0 ? (
+            <div className="text-muted-foreground italic">Nessun gruppo in corso</div>
+          ) : (
+            <ul className="space-y-4">
+              {activeGroups.map(group => (
+                <GroupListItem
+                  key={group.id}
+                  group={group}
+                  staffList={staffList}
+                  eventStaffIds={eventStaffIds}
+                  fetchGroups={fetchGroups}
+                  fetchClosedGroups={() => axios.get(`/api/groups/closed`, { params: { event_id: eventId }, withCredentials: true }).then(res => setClosedGroups(res.data))}
+                  eventId={eventId}
+                  eventInfo={eventInfo}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
       {/* Accordion gruppi chiusi */}
       <div className="mt-8">
@@ -454,7 +517,7 @@ const GroupsPage: React.FC = () => {
   const [featuredEvents, setFeaturedEvents] = useState<EventType[]>([]);
   useEffect(() => {
     if (!eventId) {
-      axios.get('/api/events/featured').then(res => setFeaturedEvents(Array.isArray(res.data) ? res.data : []));
+      axios.get('/api/events/featured', { withCredentials: true }).then(res => setFeaturedEvents(Array.isArray(res.data) ? res.data : []));
     }
   }, [eventId]);
 
@@ -515,8 +578,12 @@ const GroupListItem: React.FC<{
     date: group.date,
     activity_duration: group.activity_duration || DEFAULT_DURATION,
     is_friend: group.is_friend,
+    is_kid: group.is_kid ?? false,
     staff_id: group.staff_id,
   });
+  function handleEditIsKidChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setEditForm(f => ({ ...f, is_kid: e.target.checked }));
+  }
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -525,12 +592,12 @@ const GroupListItem: React.FC<{
       alert('Devi assegnare uno staff prima di attivare il gruppo!');
       return;
     }
-    await axios.put(`/api/groups/${group.id}`, { is_waiting: !group.is_waiting });
+    await axios.put(`/api/groups/${group.id}`, { is_waiting: !group.is_waiting}, { withCredentials: true });
     fetchGroups();
   }
 
   async function handleCloseToggle() {
-    await axios.put(`/api/groups/${group.id}`, { is_closed: !group.is_closed, event_id: eventId });
+    await axios.put(`/api/groups/${group.id}`, { is_closed: !group.is_closed, event_id: eventId }, { withCredentials: true });
     fetchGroups();
     fetchClosedGroups();
   }
@@ -559,7 +626,7 @@ const GroupListItem: React.FC<{
       await axios.put(`/api/groups/${group.id}`, {
         ...editForm,
         activity_duration: editForm.is_friend ? null : editForm.activity_duration,
-      });
+      }, { withCredentials: true });
       setEditMode(false);
       fetchGroups();
     } catch (err) {
@@ -573,8 +640,34 @@ const GroupListItem: React.FC<{
     }
   }
 
+  // Calcolo stato e classi bordo
+  let borderClass = 'border-border';
+  const bgClass = 'bg-card';
+  // Gruppo "da chiamare" (scaduto)
+  const isExpired = !group.is_friend && group.activity_duration && group.updated_at && (() => {
+    const start = new Date(group.updated_at).getTime();
+    const durationMs = group.activity_duration * 60 * 1000;
+    const elapsed = Date.now() - start;
+    return elapsed > durationMs;
+  })();
+  // Gruppo in attesa da 30+ minuti
+  let isLongWaiting = false;
+  if (group.is_waiting && group.created_at) {
+    const start = new Date(group.created_at).getTime();
+    const elapsed = Date.now() - start;
+    isLongWaiting = elapsed >= 30 * 60 * 1000;
+  }
+  if (isExpired) {
+    borderClass = 'border-red-600';
+  } else if (isLongWaiting) {
+    borderClass = 'border-orange-500';
+  } else if (group.is_waiting) {
+    borderClass = 'border-white';
+  } else {
+    borderClass = 'border-yellow-400';
+  }
   return (
-    <li className={`bg-card rounded-xl p-4 shadow border border-border`}>
+    <li className={`${bgClass} rounded-xl p-4 shadow border-4 ${borderClass}`}>
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div className="flex-1">
           {editMode ? (
@@ -584,9 +677,15 @@ const GroupListItem: React.FC<{
               <input type="number" name="number_of_people" value={editForm.number_of_people} min={1} onChange={handleEditChange} required className="block w-full border border-border bg-background text-foreground rounded-lg p-2 focus:ring-2 focus:ring-secondary focus:outline-none placeholder-muted-foreground mb-1" placeholder="Numero persone" />
               <textarea name="description" value={editForm.description} onChange={handleEditChange} className="block w-full border border-border bg-background text-foreground rounded-lg p-2 focus:ring-2 focus:ring-secondary focus:outline-none placeholder-muted-foreground mb-1" placeholder="Descrizione" />
               <input type="date" name="date" value={editForm.date} onChange={handleEditChange} required className="block w-full border border-border bg-background text-foreground rounded-lg p-2 focus:ring-2 focus:ring-secondary focus:outline-none placeholder-muted-foreground mb-1" />
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id={`isFriend-edit-${group.id}`} checked={editForm.is_friend} onChange={handleEditIsFriendChange} />
-                <label htmlFor={`isFriend-edit-${group.id}`} className="text-sm">Amico (durata indefinita)</label>
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id={`isFriend-edit-${group.id}`} checked={editForm.is_friend} onChange={handleEditIsFriendChange} />
+                  <label htmlFor={`isFriend-edit-${group.id}`} className="text-sm">Amico (durata indefinita)</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id={`isKid-edit-${group.id}`} checked={editForm.is_kid} onChange={handleEditIsKidChange} />
+                  <label htmlFor={`isKid-edit-${group.id}`} className="text-sm">Gruppo di bambini</label>
+                </div>
               </div>
               <input type="range" min={5} max={30} step={5} value={editForm.activity_duration ?? DEFAULT_DURATION} onChange={handleEditDurationChange} disabled={editForm.is_friend} className="w-full" />
               <div className="text-xs text-gray-600 mb-1">{editForm.is_friend ? 'Indefinita' : `${editForm.activity_duration} minuti`}</div>

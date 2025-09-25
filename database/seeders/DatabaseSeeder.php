@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             StaffSeeder::class,
+            ConfigurazioneSeeder::class,
             // ...altri seeder se presenti
         ]);
 
@@ -29,5 +30,12 @@ class DatabaseSeeder extends Seeder
                 'email_verified_at' => now(),
             ]
         );
+
+        // Chiedi conferma prima di eseguire PublicEventWithGroupsSeeder
+        if ($this->command && $this->command->confirm('Vuoi eseguire anche il seeder PublicEventWithGroupsSeeder (evento pubblico di test con gruppi)?')) {
+            $this->call(PublicEventWithGroupsSeeder::class);
+        } else {
+            $this->command && $this->command->info('Seeder PublicEventWithGroupsSeeder SKIPPATO.');
+        }
     }
 }

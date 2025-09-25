@@ -6,6 +6,7 @@ use App\Http\Requests\StoreGroupRequest;
 use App\Http\Requests\UpdateGroupRequest;
 
 use App\Models\Group;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -64,6 +65,31 @@ class GroupController extends Controller
             return response()->json([
                 'error' => 'Errore interno',
                 'message' => $th->getMessage()
+            ], 500);
+        }
+    }
+    /**
+     * @OA\Get(
+     *     path="/api/public/groups",
+     *     tags={"Groups"},
+     *     summary="Lista pubblica dei gruppi di un evento (info sommarie, nessun dato sensibile)",
+     *     @OA\Parameter(name="event_id", in="query", required=false, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Successo")
+     * )
+     */
+    public function publicGroups($eventId)
+    {
+        try {
+            $query = Group::with('staff:id,full_name');
+            if ($eventId) {
+                $query->where('event_id', $eventId);
+            }
+            $groups = $query->orderBy('created_at', 'asc')->get();
+            return response()->json($groups);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Errore interno',
+                'message' => $e->getMessage()
             ], 500);
         }
     }
