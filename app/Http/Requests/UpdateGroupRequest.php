@@ -15,11 +15,15 @@ class UpdateGroupRequest extends FormRequest
     public function rules()
     {
         return [
+            'staff_id' => 'sometimes|nullable|exists:staff,id',
             'number_of_people' => 'sometimes|required|integer',
+            'is_closed' => 'sometimes|nullable|boolean',
             'group_name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
-            'start_date' => 'sometimes|required|date',
-            'end_date' => 'sometimes|required|date|after_or_equal:start_date',
+            'is_waiting' => 'nullable|boolean',
+            'date' => 'sometimes|required|date',
+            'activity_duration' => 'nullable|integer|min:1',
+            'is_friend' => 'boolean',
         ];
     }
 

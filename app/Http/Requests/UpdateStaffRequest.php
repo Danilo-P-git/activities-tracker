@@ -16,8 +16,7 @@ class UpdateStaffRequest extends FormRequest
     {
         return [
             'full_name' => 'sometimes|required|string|max:255',
-            'is_available' => 'sometimes|required|string',
-            'is_busy' => 'sometimes|required|string',
+            'is_available' => 'sometimes|required|boolean',
         ];
     }
 

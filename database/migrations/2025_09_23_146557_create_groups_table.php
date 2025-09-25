@@ -16,8 +16,11 @@ return new class extends Migration
             $table->integer('number_of_people');
             $table->string('group_name');
             $table->string('description')->nullable(true);
-            $table->dateTime('start_date');
-            $table->dateTime('end_date');
+            $table->date('date');
+            $table->integer('activity_duration')->nullable(); // durata in minuti, null se indefinita
+            $table->boolean('is_friend')->default(false); // true se "amico", quindi durata indefinita
+            $table->foreignId('staff_id')->nullable()->constrained('staff');
+            $table->foreignId('event_id')->constrained('events');
             $table->timestamps();
             $table->softDeletes();
         });

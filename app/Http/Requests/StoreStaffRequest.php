@@ -16,8 +16,7 @@ class StoreStaffRequest extends FormRequest
     {
         return [
             'full_name' => 'required|string|max:255',
-            'is_available' => 'required|string',
-            'is_busy' => 'required|string',
+            'is_available' => 'required|boolean',
         ];
     }
 

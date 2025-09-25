@@ -26,25 +26,21 @@ class Event extends Model
     protected $fillable = [
         'event_name',
         'description',
-        'event_date',
+        'event_start_date',
+        'event_end_date',
         'location',
     ];
-    public function eventGroupStaff()
-    {
-        return $this->hasMany(EventGroupStaff::class);
-    }
 
     public function groups()
     {
-        return $this->belongsToMany(Group::class, 'event_group_staff')
-            ->withPivot('staff_id')
-            ->withTimestamps();
+        return $this->hasMany(Group::class);
     }
 
     public function staff()
     {
-        return $this->belongsToMany(Staff::class, 'event_group_staff')
-            ->withPivot('group_id')
-            ->withTimestamps();
+        // Relazione standard belongsToMany, la logica di grouping va nel controller
+        return $this->belongsToMany(Staff::class, 'event_staff')
+            ->using(EventStaff::class)
+            ->withPivot(['added_at', 'removed_at', 'deleted_at']);
     }
 }

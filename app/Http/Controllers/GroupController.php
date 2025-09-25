@@ -27,11 +27,43 @@ class GroupController extends Controller
     public function index()
     {
         try {
-            return response()->json(Group::all());
+            $eventId = request('event_id');
+            $query = Group::with('staff')->where('is_closed', false);
+            if ($eventId) {
+                $query->where('event_id', $eventId);
+            }
+            $groups = $query
+                ->orderByDesc('is_waiting')
+                ->orderBy('created_at', 'asc')
+                ->get();
+            return response()->json($groups);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Errore interno',
                 'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // API: lista gruppi chiusi
+    public function closed()
+    {
+        try {
+            $eventId = request('event_id');
+            $query = Group::with('staff')->where('is_closed', true);
+            if ($eventId) {
+                $query->where('event_id', $eventId);
+            }
+            $groups = $query
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+
+            return response()->json($groups);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'error' => 'Errore interno',
+                'message' => $th->getMessage()
             ], 500);
         }
     }
@@ -51,20 +83,15 @@ class GroupController extends Controller
     public function store(StoreGroupRequest $request)
     {
         try {
+            DB::beginTransaction();
             $data = $request->validated();
-            $eventId = $data['event_id'];
-            unset($data['event_id']);
+
             $group = Group::create($data);
-            // Crea la relazione nella pivot solo tra evento e gruppo (senza staff)
-            DB::table('event_group_staff')->insert([
-                'event_id' => $eventId,
-                'group_id' => $group->id,
-                'staff_id' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            $group->load('staff');
+            DB::commit();
             return response()->json($group, 201);
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json([
                 'error' => 'Errore interno',
                 'message' => $e->getMessage()
@@ -83,6 +110,7 @@ class GroupController extends Controller
      */
     public function show(Group $group)
     {
+        $group->load('staff');
         return $group;
     }
 
@@ -101,8 +129,20 @@ class GroupController extends Controller
      */
     public function update(UpdateGroupRequest $request, Group $group)
     {
-        $group->update($request->validated());
-        return response()->json($group);
+        try {
+            DB::beginTransaction();
+            $data = $request->validated();
+            $group->update($data);
+            $group->load('staff');
+            DB::commit();
+            return response()->json($group);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'error' => 'Errore interno',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

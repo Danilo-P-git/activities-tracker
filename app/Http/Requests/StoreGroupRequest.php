@@ -16,11 +16,13 @@ class StoreGroupRequest extends FormRequest
     {
         return [
             'event_id' => 'required|exists:events,id',
+            'staff_id' => 'required|exists:staff,id',
             'number_of_people' => 'required|integer',
             'group_name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
+            'date' => 'required|date',
+            'activity_duration' => 'nullable|integer|min:1',
+            'is_friend' => 'boolean',
         ];
     }
 

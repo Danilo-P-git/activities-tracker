@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Support\Facades\Route;
@@ -13,7 +14,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 });
 
-
+Route::get('/eventi', function () {
+    return Inertia::render('events');
+});
+Route::get('/home', function () {
+    return Inertia::render('home');
+})->name('home');
+Route::get('/gruppi', function () {
+    return Inertia::render('groups');
+})->name('groups');
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

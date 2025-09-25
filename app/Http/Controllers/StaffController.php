@@ -33,6 +33,29 @@ class StaffController extends Controller{
             ], 500);
         }
     }
+        /**
+         * @OA\Get(
+         *     path="/api/events/{event}/staff",
+         *     tags={"Staff"},
+         *     summary="Lista staff di un evento (attivi e non)",
+         *     @OA\Parameter(name="event", in="path", required=true, @OA\Schema(type="integer")),
+         *     @OA\Response(response=200, description="Successo")
+         * )
+         */
+        public function staffByEvent($eventId)
+        {
+            try {
+                $event = \App\Models\Event::findOrFail($eventId);
+                // Recupera staff associato all'evento (anche non disponibili)
+                $staff = $event->staff()->withTrashed()->get();
+                return response()->json($staff);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'error' => 'Errore interno',
+                    'message' => $e->getMessage()
+                ], 500);
+            }
+        }
 
     /**
      * @OA\Post(
