@@ -43,4 +43,5 @@ class Event extends Model
             ->using(EventStaff::class)
             ->withPivot(['added_at', 'removed_at', 'deleted_at']);
     }
+
 }

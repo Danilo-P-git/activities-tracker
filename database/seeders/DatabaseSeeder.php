@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -14,28 +13,44 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call([
-            StaffSeeder::class,
-            ConfigurazioneSeeder::class,
-            // ...altri seeder se presenti
-        ]);
+        $choice = $this->command->choice(
+            'Cosa vuoi seminare?',
+            [
+                1 => 'Solo utenti',
+                2 => 'Utenti + Staff',
+                3 => 'Utenti + Staff + Gruppi (evento di test)',
+            ],
+            1
+        );
 
-        // User::factory(10)->create();
+
+        // ── Utenti ────────────────────────────────────────────────────────────
+        $this->call(ConfigurazioneSeeder::class);
 
         User::firstOrCreate(
             ['email' => 'test@example.com'],
             [
-                'name' => 'Test User',
-                'password' => Hash::make('password'),
-                'email_verified_at' => now(),
+                'name'               => 'Test User',
+                'password'           => Hash::make('password'),
+                'email_verified_at'  => now(),
             ]
         );
+        $this->command->info('✓ Utenti');
 
-        // Chiedi conferma prima di eseguire PublicEventWithGroupsSeeder
-        if ($this->command && $this->command->confirm('Vuoi eseguire anche il seeder PublicEventWithGroupsSeeder (evento pubblico di test con gruppi)?')) {
-            $this->call(PublicEventWithGroupsSeeder::class);
-        } else {
-            $this->command && $this->command->info('Seeder PublicEventWithGroupsSeeder SKIPPATO.');
+        if ($choice === 'Solo utenti') {
+            return;
         }
+
+        // ── Staff ─────────────────────────────────────────────────────────────
+        $this->call(StaffSeeder::class);
+        $this->command->info('✓ Staff + Configurazione');
+
+        if ($choice === 'Utenti + Staff') {
+            return;
+        }
+
+        // ── Gruppi (evento di test) ───────────────────────────────────────────
+        $this->call(PublicEventWithGroupsSeeder::class);
+        $this->command->info('✓ Evento pubblico di test con gruppi');
     }
 }

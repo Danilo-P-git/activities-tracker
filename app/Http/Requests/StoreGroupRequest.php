@@ -16,7 +16,7 @@ class StoreGroupRequest extends FormRequest
     {
         return [
             'event_id' => 'required|exists:events,id',
-            'staff_id' => 'required|exists:staff,id',
+            'staff_id' => 'nullable|exists:staff,id',
             'number_of_people' => 'required|integer',
             'group_name' => 'required|string|max:255',
             'description' => 'nullable|string',

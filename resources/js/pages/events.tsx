@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MenuBar from '../components/MenuBar';
 import axios from 'axios';
 import { Dialog, Transition } from '@headlessui/react';
-import { PlusIcon, CheckIcon, ChevronUpDownIcon, PencilSquareIcon } from '@heroicons/react/24/solid';
-import { Listbox } from '@headlessui/react';
+import { PlusIcon, CheckIcon, PencilSquareIcon } from '@heroicons/react/24/solid';
 
 // AGGIUNGI: StaffType per supporto staff in modale e edit
 
@@ -309,48 +308,36 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
                   <input id="location" name="location" type="text" placeholder="Es: Ciminiere Catania" value={form.location} onChange={handleChange} className="block w-full border border-border bg-background text-foreground rounded-lg p-2 focus:ring-2 focus:ring-secondary focus:outline-none placeholder-muted-foreground" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Staff assegnato</label>
-                  <Listbox value={form.staff_ids} onChange={handleStaffChange} multiple>
-                    <div className="relative mt-1">
-                      <Listbox.Button className="w-full cursor-pointer rounded-lg bg-background border border-border py-2 pl-3 pr-10 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-foreground transition">
-                        <span className={form.staff_ids.length === 0 ? 'block truncate text-muted-foreground italic' : 'block truncate'}>
-                          {form.staff_ids.length === 0
-                            ? 'Seleziona staff'
-                            : staffList.filter(s => form.staff_ids.includes(s.id)).map(s => s.full_name).join(', ')}
-                        </span>
-                        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                          <ChevronUpDownIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-                        </span>
-                      </Listbox.Button>
-                      <Listbox.Options className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-card py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm border border-border">
-                        {staffList.map((staff) => (
-                          <Listbox.Option
+                  <label className="block text-sm font-medium text-foreground mb-2">Staff assegnato</label>
+                  {staffList.length === 0 ? (
+                    <div className="text-muted-foreground italic text-sm">Nessuno staff disponibile</div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {staffList.map(staff => {
+                        const selected = form.staff_ids.includes(staff.id);
+                        return (
+                          <button
                             key={staff.id}
-                            value={staff.id}
-                            className={({ active, selected }) =>
-                              [
-                                'relative cursor-pointer select-none py-2 pl-10 pr-4 transition',
-                                active ? 'bg-primary/10 text-primary' : 'text-foreground',
-                                selected ? 'font-bold text-primary' : '',
-                              ].join(' ')
-                            }
-                          >
-                            {({ selected }) => (
-                              <>
-                                <span className={`block truncate ${selected ? 'font-bold' : ''}`}>{staff.full_name}</span>
-                                {selected ? (
-                                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
-                                    <CheckIcon className="h-5 w-5" aria-hidden="true" />
-                                  </span>
-                                ) : null}
-                              </>
+                            type="button"
+                            onClick={() => handleStaffChange(
+                              selected
+                                ? form.staff_ids.filter(id => id !== staff.id)
+                                : [...form.staff_ids, staff.id]
                             )}
-                          </Listbox.Option>
-                        ))}
-                      </Listbox.Options>
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border-2 transition select-none ${
+                              selected
+                                ? 'bg-primary text-background border-primary shadow-sm'
+                                : 'bg-background text-foreground border-border hover:border-primary hover:text-primary'
+                            }`}
+                          >
+                            {selected && <CheckIcon className="w-3.5 h-3.5 shrink-0" />}
+                            {staff.full_name}
+                          </button>
+                        );
+                      })}
                     </div>
-                  </Listbox>
-                  <span className="text-xs text-muted-foreground mt-1">Seleziona uno o più membri dello staff</span>
+                  )}
+                  <span className="text-xs text-muted-foreground mt-2 block">Tocca per selezionare / deselezionare</span>
                 </div>
                 <button type="submit" className="bg-secondary hover:bg-primary text-background rounded-lg p-2 font-bold transition">Salva</button>
               </form>

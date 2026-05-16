@@ -28,6 +28,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/configurazione', function() {
         return Inertia::render('configurazione');
     })->name('configurazione');
+    Route::get('/staff', function () {
+        return Inertia::render('staff');
+    })->name('staff');
+    Route::get('/metriche', function () {
+        return Inertia::render('metrics');
+    })->name('metrics');
 });
 
 Route::get('public-page', function() {

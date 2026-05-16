@@ -29,7 +29,7 @@ export default function HomePage() {
                 <div className="flex items-center gap-2"><span className="inline-block w-4 h-4 rounded bg-primary"></span> Evento in evidenza</div>
               </div>
             </div>
-            <a href="/events" className="mt-8 bg-primary hover:bg-secondary text-background font-bold rounded-lg px-6 py-3 shadow transition text-lg self-center">Vai agli eventi</a>
+            <a href="/eventi" className="mt-8 bg-primary hover:bg-secondary text-background font-bold rounded-lg px-6 py-3 shadow transition text-lg self-center">Vai agli eventi</a>
           </div>
           {/* Card Gestione attività in arena */}
           <div className="flex-1 max-w-xl bg-card rounded-xl shadow p-6 mb-8 border border-border flex flex-col">

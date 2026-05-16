@@ -47,7 +47,14 @@ const PublicGroupsPage: React.FC = () => {
   const [config, setConfig] = useState<{ gruppi_contemporanei_possibili: number; durata_media_gruppo: number } | null>(null);
 
   useEffect(() => {
-    axios.get('/api/events/featured').then(res => setEvents(Array.isArray(res.data) ? res.data : []));
+    axios.get('/api/events/featured').then(res => {
+      const list = Array.isArray(res.data) ? res.data : [];
+      setEvents(list);
+      // Seleziona automaticamente il primo evento disponibile
+      if (list.length > 0) {
+        setSelectedEvent(list[0].id);
+      }
+    });
     // Carica configurazione
     axios.get('/api/configurazione').then(res => {
       // Si assume che la risposta sia un oggetto { chiave: valore }

@@ -15,8 +15,10 @@ class StoreStaffRequest extends FormRequest
     public function rules()
     {
         return [
-            'full_name' => 'required|string|max:255',
+            'full_name'    => 'required|string|max:255',
+            'phone'        => 'nullable|string|max:30',
             'is_available' => 'required|boolean',
+            'is_master'    => 'boolean',
         ];
     }
 

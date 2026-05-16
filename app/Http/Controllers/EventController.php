@@ -119,6 +119,7 @@ class EventController extends Controller{
                     'event_id' => $event->id,
                     'staff_id' => $staffId,
                     'added_at' => now(),
+                    'status'   => 'active',
                 ]);
             }
             // Raggruppa staff per periodi
@@ -134,6 +135,8 @@ class EventController extends Controller{
                     $staffGrouped[$id] = [
                         'id' => $id,
                         'full_name' => $es->staff ? $es->staff->full_name : null,
+                        'is_currently_present' => false,
+                        'is_on_break' => false,
                         'periods' => [],
                     ];
                 }
@@ -141,7 +144,13 @@ class EventController extends Controller{
                     'added_at' => $es->added_at,
                     'removed_at' => $es->removed_at,
                     'deleted_at' => $es->deleted_at,
+                    'status' => $es->status,
                 ];
+                $isActive = is_null($es->removed_at) && is_null($es->deleted_at);
+                if ($isActive) {
+                    $staffGrouped[$id]['is_currently_present'] = true;
+                    $staffGrouped[$id]['is_on_break'] = $es->status === 'break';
+                }
             }
             $eventData = $event->toArray();
             $eventData['staff'] = array_values($staffGrouped);
@@ -190,6 +199,7 @@ class EventController extends Controller{
                         'event_id' => $event->id,
                         'staff_id' => $staffId,
                         'added_at' => now(),
+                        'status'   => 'active',
                     ]);
                 }
                 // Rimuovi staff (soft delete e set removed_at su tutti i record attivi per quello staff)
@@ -218,6 +228,8 @@ class EventController extends Controller{
                     $staffGrouped[$id] = [
                         'id' => $id,
                         'full_name' => $es->staff ? $es->staff->full_name : null,
+                        'is_currently_present' => false,
+                        'is_on_break' => false,
                         'periods' => [],
                     ];
                 }
@@ -225,7 +237,13 @@ class EventController extends Controller{
                     'added_at' => $es->added_at,
                     'removed_at' => $es->removed_at,
                     'deleted_at' => $es->deleted_at,
+                    'status' => $es->status,
                 ];
+                $isActive = is_null($es->removed_at) && is_null($es->deleted_at);
+                if ($isActive) {
+                    $staffGrouped[$id]['is_currently_present'] = true;
+                    $staffGrouped[$id]['is_on_break'] = $es->status === 'break';
+                }
             }
             $eventData = $event->toArray();
             $eventData['staff'] = array_values($staffGrouped);
@@ -266,6 +284,8 @@ class EventController extends Controller{
                     $staffGrouped[$id] = [
                         'id' => $id,
                         'full_name' => $es->staff ? $es->staff->full_name : null,
+                        'is_currently_present' => false,
+                        'is_on_break' => false,
                         'periods' => [],
                     ];
                 }
@@ -273,7 +293,13 @@ class EventController extends Controller{
                     'added_at' => $es->added_at,
                     'removed_at' => $es->removed_at,
                     'deleted_at' => $es->deleted_at,
+                    'status' => $es->status,
                 ];
+                $isActive = is_null($es->removed_at) && is_null($es->deleted_at);
+                if ($isActive) {
+                    $staffGrouped[$id]['is_currently_present'] = true;
+                    $staffGrouped[$id]['is_on_break'] = $es->status === 'break';
+                }
             }
             $eventData = $event->toArray();
             $eventData['staff'] = array_values($staffGrouped);

@@ -15,8 +15,10 @@ class UpdateStaffRequest extends FormRequest
     public function rules()
     {
         return [
-            'full_name' => 'sometimes|required|string|max:255',
-            'is_available' => 'sometimes|required|boolean',
+            'full_name'    => 'sometimes|required|string|max:255',
+            'phone'        => 'nullable|string|max:30',
+            'is_available' => 'sometimes|boolean',
+            'is_master'    => 'sometimes|boolean',
         ];
     }
 

@@ -136,8 +136,15 @@ class GroupController extends Controller
      */
     public function show(Group $group)
     {
-        $group->load('staff');
-        return $group;
+        try {
+            $group->load('staff');
+            return response()->json($group);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error'   => 'Errore interno',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -158,6 +165,13 @@ class GroupController extends Controller
         try {
             DB::beginTransaction();
             $data = $request->validated();
+
+            // Imposta activity_started_at la prima volta che il gruppo viene attivato (is_waiting: true → false)
+            $wasWaiting = $group->is_waiting;
+            if ($wasWaiting && isset($data['is_waiting']) && !$data['is_waiting'] && is_null($group->activity_started_at)) {
+                $data['activity_started_at'] = now();
+            }
+
             $group->update($data);
             $group->load('staff');
             DB::commit();
@@ -182,7 +196,14 @@ class GroupController extends Controller
      */
     public function destroy(Group $group)
     {
-        $group->delete();
-        return response()->json(null, 204);
+        try {
+            $group->delete();
+            return response()->json(null, 204);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error'   => 'Errore interno',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 }

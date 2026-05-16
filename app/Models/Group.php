@@ -33,6 +33,7 @@ class Group extends Model
         'staff_id',
         'date',
         'activity_duration',
+        'activity_started_at',
         'is_friend',
         'is_kid',
     ];
@@ -41,6 +42,7 @@ class Group extends Model
         'is_waiting' => 'boolean',
         'is_closed' => 'boolean',
         'is_kid' => 'boolean',
+        'activity_started_at' => 'datetime',
     ];
 
     public function event()

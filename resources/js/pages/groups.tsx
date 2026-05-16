@@ -8,6 +8,10 @@ type StaffType = {
   id: number;
   full_name: string;
   is_available: boolean | string | number;
+  is_on_break?: boolean;
+  is_currently_present?: boolean;
+  status?: string;
+  updated_at?: string | null;
 };
 
 type GroupType = {
@@ -63,6 +67,10 @@ const GroupTimer: React.FC<{ group: GroupType }> = ({ group }) => {
 // Stato configurazione globale
 const DEFAULT_DURATION = 5;
 
+function isStaffAvailable(value: StaffType['is_available']) {
+  return value === true || value === '1' || value === 1;
+}
+
 
 const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
   const [groups, setGroups] = useState<GroupType[]>([]);
@@ -99,7 +107,6 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
   const [error, setError] = useState<string | null>(null);
   const [eventClosed, setEventClosed] = useState(false);
   const [loading, setLoading] = useState(false);
-
 
   useEffect(() => {
     fetchGroups();
@@ -264,8 +271,8 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
             <thead>
               <tr className="text-muted-foreground">
                 <th className="text-left p-2">Nome</th>
-                <th className="text-left p-2">Disponibile</th>
-                <th className="text-left p-2">Azioni</th>
+                <th className="text-left p-2">In pausa</th>
+                <th className="text-left p-2">Stato</th>
               </tr>
             </thead>
             <tbody>
@@ -275,20 +282,24 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                   <td className="p-2">
                     <input
                       type="checkbox"
-                      checked={staff.is_available === true || staff.is_available === '1' || staff.is_available === 1}
-                      onChange={async e => {
-                        await axios.put(`/api/staff/${staff.id}`, { is_available: e.target.checked ? 1 : 0 }, { withCredentials: true });
-                        // Aggiorna solo la lista staff evento
+                      checked={staff.is_on_break ?? false}
+                      disabled={!staff.is_currently_present}
+                      title={!staff.is_currently_present ? 'Lo staff è attualmente assente dall\'evento' : undefined}
+                      onChange={async () => {
+                        const newStatus = staff.is_on_break ? 'active' : 'break';
+                        await axios.put(`/api/events/${eventId}/staff/${staff.id}/status`, { status: newStatus }, { withCredentials: true });
+                        // Aggiorna lista staff evento
                         axios.get(`/api/events/${eventId}/staff`, { withCredentials: true }).then(res => setEventStaffList(res.data));
                       }}
                     />
                   </td>
                   <td className="p-2">
-                    {(!staff.is_available || staff.is_available === '0' || staff.is_available === 0) &&  (
-                      <span className="text-xs text-red-600 font-semibold">Non selezionabile</span>
-                    )}
-                    {(staff.is_available === true || staff.is_available === '1' || staff.is_available === 1) && (
-                      <span className="text-xs text-green-600 font-semibold">Selezionabile</span>
+                    {!staff.is_currently_present ? (
+                      <span className="text-xs text-muted-foreground font-semibold">Assente</span>
+                    ) : staff.is_on_break ? (
+                      <span className="text-xs text-orange-500 font-semibold">In pausa</span>
+                    ) : (
+                      <span className="text-xs text-green-600 font-semibold">Disponibile</span>
                     )}
                   </td>
                 </tr>
@@ -359,37 +370,58 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                     </span>
                   </Listbox.Button>
                   <Listbox.Options className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-card py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm border border-border">
-                    {staffList.filter(staff => eventStaffIds.includes(staff.id)).map((staff) => (
-                      <Listbox.Option
-                        key={staff.id}
-                        value={staff.id}
-                        disabled={!staff.is_available || staff.is_available === '0' || staff.is_available === 0}
-                        className={({ active, selected, disabled }) =>
-                          [
-                            'relative select-none py-2 pl-10 pr-4 transition',
-                            active ? 'bg-primary/10 text-primary' : 'text-foreground',
-                            selected ? 'font-bold text-primary' : '',
-                            disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
-                          ].join(' ')
-                        }
-                      >
-                        {({ selected, disabled }) => (
-                          <>
-                            <span className={`block truncate ${selected ? 'font-bold' : ''}`}>{staff.full_name}</span>
-
-                            {selected && !disabled ? (
-                              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
-                                <CheckIcon className="h-5 w-5" aria-hidden="true" />
-                              </span>
-                            ) : null}
-                          </>
-                        )}
-                      </Listbox.Option>
-                    ))}
+                    <Listbox.Option
+                      value={null}
+                      className={({ active }) =>
+                        ['relative cursor-pointer select-none py-2 pl-10 pr-4 transition italic', active ? 'bg-primary/10 text-primary' : 'text-muted-foreground'].join(' ')
+                      }
+                    >
+                      {({ selected }) => (
+                        <>
+                          <span className="block truncate">Nessuno</span>
+                          {selected && (
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
+                              <CheckIcon className="h-5 w-5" aria-hidden="true" />
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </Listbox.Option>
+                    {staffList.filter(staff => eventStaffIds.includes(staff.id)).map((staff) => {
+                      const isPresent = eventStaffList.find(es => es.id === staff.id)?.is_currently_present !== false;
+                      return (
+                        <Listbox.Option
+                          key={staff.id}
+                          value={staff.id}
+                          disabled={!isStaffAvailable(staff.is_available) || !isPresent}
+                          className={({ active, selected, disabled }) =>
+                            [
+                              'relative select-none py-2 pl-10 pr-4 transition',
+                              active ? 'bg-primary/10 text-primary' : 'text-foreground',
+                              selected ? 'font-bold text-primary' : '',
+                              disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                            ].join(' ')
+                          }
+                        >
+                          {({ selected }) => (
+                            <>
+                              <span className={`block truncate ${selected ? 'font-bold' : ''} ${!isPresent ? 'line-through' : ''}`}>{staff.full_name}</span>
+                              {!isPresent ? (
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-xs">Assente</span>
+                              ) : selected ? (
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
+                                  <CheckIcon className="h-5 w-5" aria-hidden="true" />
+                                </span>
+                              ) : null}
+                            </>
+                          )}
+                        </Listbox.Option>
+                      );
+                    })}
                   </Listbox.Options>
                 </div>
               </Listbox>
-              <span className="text-xs text-muted-foreground mt-1">Seleziona solo un membro dello staff presente nell'evento</span>
+              <span className="text-xs text-muted-foreground mt-1">Seleziona solo un membro dello staff presente nell'evento (opzionale)</span>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
@@ -411,6 +443,7 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                   group={group}
                   staffList={staffList}
                   eventStaffIds={eventStaffIds}
+                  eventStaffList={eventStaffList}
                   fetchGroups={fetchGroups}
                   fetchClosedGroups={() => axios.get(`/api/groups/closed`, { params: { event_id: eventId }, withCredentials: true }).then(res => setClosedGroups(res.data))}
                   eventId={eventId}
@@ -433,6 +466,7 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                   group={group}
                   staffList={staffList}
                   eventStaffIds={eventStaffIds}
+                  eventStaffList={eventStaffList}
                   fetchGroups={fetchGroups}
                   fetchClosedGroups={() => axios.get(`/api/groups/closed`, { params: { event_id: eventId }, withCredentials: true }).then(res => setClosedGroups(res.data))}
                   eventId={eventId}
@@ -564,11 +598,12 @@ const GroupListItem: React.FC<{
   group: GroupType;
   staffList: StaffType[];
   eventStaffIds: number[];
+  eventStaffList: StaffType[];
   fetchGroups: () => void;
   fetchClosedGroups: () => void;
   eventId: number;
   eventInfo?: { event_start_date?: string; event_end_date?: string } | null;
-}> = ({ group, staffList, eventStaffIds, fetchGroups, fetchClosedGroups, eventId, eventInfo }) => {
+}> = ({ group, staffList, eventStaffIds, eventStaffList, fetchGroups, fetchClosedGroups, eventId, eventInfo }) => {
   const showTimer = !group.is_friend && group.activity_duration && group.created_at;
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -586,14 +621,30 @@ const GroupListItem: React.FC<{
   }
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [pickStaffOpen, setPickStaffOpen] = useState(false);
+  const [pickedStaffId, setPickedStaffId] = useState<number | null>(null);
+  const [pickStaffLoading, setPickStaffLoading] = useState(false);
 
   async function handleWaitingToggle() {
     if (group.is_waiting && !group.staff_id) {
-      alert('Devi assegnare uno staff prima di attivare il gruppo!');
+      setPickedStaffId(null);
+      setPickStaffOpen(true);
       return;
     }
-    await axios.put(`/api/groups/${group.id}`, { is_waiting: !group.is_waiting}, { withCredentials: true });
+    await axios.put(`/api/groups/${group.id}`, { is_waiting: !group.is_waiting }, { withCredentials: true });
     fetchGroups();
+  }
+
+  async function handlePickStaffAndActivate() {
+    if (!pickedStaffId) return;
+    setPickStaffLoading(true);
+    try {
+      await axios.put(`/api/groups/${group.id}`, { staff_id: pickedStaffId, is_waiting: false }, { withCredentials: true });
+      setPickStaffOpen(false);
+      fetchGroups();
+    } finally {
+      setPickStaffLoading(false);
+    }
   }
 
   async function handleCloseToggle() {
@@ -667,6 +718,7 @@ const GroupListItem: React.FC<{
     borderClass = 'border-yellow-400';
   }
   return (
+    <>
     <li className={`${bgClass} rounded-xl p-4 shadow border-4 ${borderClass}`}>
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div className="flex-1">
@@ -702,35 +754,54 @@ const GroupListItem: React.FC<{
                     </span>
                   </Listbox.Button>
                   <Listbox.Options className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-card py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm border border-border">
-                    {staffList.filter(staff => eventStaffIds.includes(staff.id)).map((staff) => (
-                      <Listbox.Option
-                        key={staff.id}
-                        value={staff.id}
-                        disabled={!staff.is_available || staff.is_available === '0' || staff.is_available === 0}
-                        className={({ active, selected, disabled }) =>
-                          [
-                            'relative select-none py-2 pl-10 pr-4 transition',
-                            active ? 'bg-primary/10 text-primary' : 'text-foreground',
-                            selected ? 'font-bold text-primary' : '',
-                            disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
-                          ].join(' ')
-                        }
-                      >
-                        {({ selected, disabled }) => (
-                          <>
-                            <span className={`block truncate ${selected ? 'font-bold' : ''}`}>{staff.full_name}</span>
-                            {disabled && (
-                              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-red-500 text-xs">Non selezionabile</span>
-                            )}
-                            {selected && !disabled ? (
-                              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
-                                <CheckIcon className="h-5 w-5" aria-hidden="true" />
-                              </span>
-                            ) : null}
-                          </>
-                        )}
-                      </Listbox.Option>
-                    ))}
+                    <Listbox.Option
+                      value={null}
+                      className={({ active }) =>
+                        ['relative cursor-pointer select-none py-2 pl-10 pr-4 transition italic', active ? 'bg-primary/10 text-primary' : 'text-muted-foreground'].join(' ')
+                      }
+                    >
+                      {({ selected }) => (
+                        <>
+                          <span className="block truncate">Nessuno</span>
+                          {selected && (
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
+                              <CheckIcon className="h-5 w-5" aria-hidden="true" />
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </Listbox.Option>
+                    {staffList.filter(staff => eventStaffIds.includes(staff.id)).map((staff) => {
+                      const isPresent = eventStaffList.find(es => es.id === staff.id)?.is_currently_present !== false;
+                      return (
+                        <Listbox.Option
+                          key={staff.id}
+                          value={staff.id}
+                          disabled={!isStaffAvailable(staff.is_available) || !isPresent}
+                          className={({ active, selected, disabled }) =>
+                            [
+                              'relative select-none py-2 pl-10 pr-4 transition',
+                              active ? 'bg-primary/10 text-primary' : 'text-foreground',
+                              selected ? 'font-bold text-primary' : '',
+                              disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                            ].join(' ')
+                          }
+                        >
+                          {({ selected }) => (
+                            <>
+                              <span className={`block truncate ${selected ? 'font-bold' : ''} ${!isPresent ? 'line-through' : ''}`}>{staff.full_name}</span>
+                              {!isPresent ? (
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-xs">Assente</span>
+                              ) : selected ? (
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
+                                  <CheckIcon className="h-5 w-5" aria-hidden="true" />
+                                </span>
+                              ) : null}
+                            </>
+                          )}
+                        </Listbox.Option>
+                      );
+                    })}
                   </Listbox.Options>
                 </div>
               </Listbox>
@@ -792,5 +863,89 @@ const GroupListItem: React.FC<{
         </div>
       </div>
     </li>
+    {pickStaffOpen && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        onClick={() => setPickStaffOpen(false)}
+      >
+        <div
+          className="bg-card border border-border rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4"
+          onClick={e => e.stopPropagation()}
+        >
+          <h3 className="text-lg font-bold text-primary mb-1">Attiva gruppo</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Seleziona uno staff per attivare{' '}
+            <span className="font-semibold text-foreground">{group.group_name}</span>
+          </p>
+          <Listbox value={pickedStaffId} onChange={setPickedStaffId}>
+            <div className="relative mb-4">
+              <Listbox.Button className="w-full cursor-pointer rounded-lg bg-background border border-border py-2 pl-3 pr-10 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-foreground transition">
+                <span className={pickedStaffId === null ? 'block truncate text-muted-foreground italic' : 'block truncate'}>
+                  {pickedStaffId === null
+                    ? 'Seleziona staff...'
+                    : staffList.find(s => s.id === pickedStaffId)?.full_name}
+                </span>
+                <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                  <ChevronUpDownIcon className="h-5 w-5 text-muted-foreground" />
+                </span>
+              </Listbox.Button>
+              <Listbox.Options className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-lg bg-card py-1 shadow-lg ring-1 ring-black/5 focus:outline-none text-sm border border-border">
+                {staffList
+                  .filter(s => eventStaffIds.includes(s.id))
+                  .map(staff => {
+                    const isPresent = eventStaffList.find(es => es.id === staff.id)?.is_currently_present !== false;
+                    return (
+                      <Listbox.Option
+                        key={staff.id}
+                        value={staff.id}
+                        disabled={!isPresent || !isStaffAvailable(staff.is_available)}
+                        className={({ active, selected, disabled }) =>
+                          [
+                            'relative select-none py-2 pl-10 pr-4 transition',
+                            active ? 'bg-primary/10 text-primary' : 'text-foreground',
+                            selected ? 'font-bold text-primary' : '',
+                            disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                          ].join(' ')
+                        }
+                      >
+                        {({ selected }) => (
+                          <>
+                            <span className={`block truncate ${selected ? 'font-bold' : ''} ${!isPresent ? 'line-through' : ''}`}>{staff.full_name}</span>
+                            {!isPresent ? (
+                              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-xs">Assente</span>
+                            ) : selected ? (
+                              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
+                                <CheckIcon className="h-5 w-5" />
+                              </span>
+                            ) : null}
+                          </>
+                        )}
+                      </Listbox.Option>
+                    );
+                  })}
+              </Listbox.Options>
+            </div>
+          </Listbox>
+          <div className="flex gap-3 justify-end mt-2">
+            <button
+              type="button"
+              onClick={() => setPickStaffOpen(false)}
+              className="px-4 py-2 rounded-lg border border-border text-foreground hover:bg-muted transition font-semibold text-sm"
+            >
+              Annulla
+            </button>
+            <button
+              type="button"
+              onClick={handlePickStaffAndActivate}
+              disabled={!pickedStaffId || pickStaffLoading}
+              className="px-4 py-2 rounded-lg bg-primary hover:bg-secondary text-background font-bold transition text-sm disabled:opacity-50"
+            >
+              {pickStaffLoading ? 'Attivazione...' : 'Conferma e attiva'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 };

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\StaffController;
+use App\Http\Controllers\MetricsController;
 use App\Models\Group;
 use App\Http\Controllers\ConfigurazioneController;
 
@@ -20,6 +21,12 @@ Route::get('events/featured', [EventController::class, 'featured']);
 // API pubblica: tutti i gruppi con info sommarie (no auth)
 // API: staff di un evento (attivi e non)
 Route::get('/events/{event}/staff', [StaffController::class, 'staffByEvent']);
+// API: statistiche staff per evento (attività, tempo in/out arena, idle)
+Route::get('/events/{event}/staff/stats', [StaffController::class, 'staffStats']);
+// API: metriche staff per evento (attività, tempo arena, pause, idle)
+Route::get('/events/{event}/metrics/staff', [MetricsController::class, 'staffMetrics']);
+// API: imposta status del periodo corrente (active/break) — pausa senza uscire dall'evento
+Route::put('/events/{event}/staff/{staff}/status', [StaffController::class, 'updateEventStatus']);
 
 Route::apiResource('events', EventController::class);
 Route::apiResource('groups', GroupController::class);

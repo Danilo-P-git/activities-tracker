@@ -22,8 +22,16 @@ class Staff extends Model
 
     protected $fillable = [
         'full_name',
+        'phone',
         'is_available',
+        'is_master',
     ];
+
+    protected $casts = [
+        'is_available' => 'boolean',
+        'is_master'    => 'boolean',
+    ];
+
     public function events()
     {
         return $this->belongsToMany(Event::class, 'event_staff')
