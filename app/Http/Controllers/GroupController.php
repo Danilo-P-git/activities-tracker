@@ -6,7 +6,7 @@ use App\Http\Requests\StoreGroupRequest;
 use App\Http\Requests\UpdateGroupRequest;
 
 use App\Models\Group;
-use Illuminate\Http\Client\Request;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -170,6 +170,12 @@ class GroupController extends Controller
             $wasWaiting = $group->is_waiting;
             if ($wasWaiting && isset($data['is_waiting']) && !$data['is_waiting'] && is_null($group->activity_started_at)) {
                 $data['activity_started_at'] = now();
+            }
+
+            // Imposta closed_at la prima volta che il gruppo viene chiuso (is_closed: false → true)
+            $wasClosed = $group->is_closed;
+            if (!$wasClosed && isset($data['is_closed']) && $data['is_closed'] && is_null($group->closed_at)) {
+                $data['closed_at'] = now();
             }
 
             $group->update($data);

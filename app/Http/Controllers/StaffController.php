@@ -94,9 +94,27 @@ class StaffController extends Controller{
                     $isActivePeriod = is_null($record->removed_at) && is_null($record->deleted_at);
                     if ($isActivePeriod) {
                         $staffGrouped[$staffId]['is_currently_present'] = true;
-                        $staffGrouped[$staffId]['is_on_break'] = $record->status === 'break';
+                        $isOnBreak = $record->status === 'break';
+                        $staffGrouped[$staffId]['is_on_break'] = $isOnBreak;
+                        if ($isOnBreak) {
+                            $activeBreak = $record->breaks()->whereNull('ended_at')->latest('started_at')->first();
+                            $staffGrouped[$staffId]['break_started_at'] = $activeBreak ? $activeBreak->started_at : null;
+                        }
                     }
                 }
+
+                // Gruppi svolti oggi per ogni staff
+                $today = Carbon::today()->toDateString();
+                $groupsToday = Group::where('event_id', $eventId)
+                    ->where('date', $today)
+                    ->where('is_waiting', false)
+                    ->whereNotNull('staff_id')
+                    ->get()
+                    ->groupBy('staff_id');
+                foreach ($staffGrouped as $sid => &$data) {
+                    $data['groups_today'] = isset($groupsToday[$sid]) ? $groupsToday[$sid]->count() : 0;
+                }
+                unset($data);
 
                 return response()->json(array_values($staffGrouped));
             } catch (\Exception $e) {

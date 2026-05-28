@@ -84,6 +84,29 @@ class EventController extends Controller{
             })
             ->orderBy('event_start_date')
             ->get();
+            // Se non ci sono eventi in corso o entro una settimana, prendi quelli entro un mese
+            if ($events->isEmpty()) {
+                $monthBefore = $now->copy()->subMonth();
+                $monthAfter = $now->copy()->addMonth();
+                    $events = Event::where(function($q) use ($monthBefore, $monthAfter) {
+                        $q->whereBetween('event_start_date', [$monthBefore, $monthAfter])
+                          ->orWhereBetween('event_end_date', [$monthBefore, $monthAfter])
+                          ->orWhere(function($q2) use ($monthBefore, $monthAfter) {
+                              $q2->where('event_start_date', '<', $monthBefore)
+                                 ->where('event_end_date', '>', $monthAfter);
+                          });
+                    })
+                    ->orderBy('event_start_date')
+                    ->get();
+            }
+
+            if ($events->isEmpty()) {
+                // Se ancora vuoto, prendi i prossimi 5 eventi futuri
+                $events = Event::where('event_start_date', '>', $now)
+                    ->orderBy('event_start_date')
+                    ->limit(5)
+                    ->get();
+            }
             return response()->json($events);
         } catch (\Exception $e) {
             return response()->json([
@@ -110,7 +133,8 @@ class EventController extends Controller{
             DB::beginTransaction();
             $data = $request->validated();
             $staffIds = $data['staff_ids'] ?? [];
-            unset($data['staff_ids']);
+            $shifts   = $data['shifts'] ?? [];
+            unset($data['staff_ids'], $data['shifts']);
 
             $event = Event::create($data);
             // Inserisci manualmente staff con added_at
@@ -120,6 +144,14 @@ class EventController extends Controller{
                     'staff_id' => $staffId,
                     'added_at' => now(),
                     'status'   => 'active',
+                ]);
+            }
+            // Inserisci turni
+            foreach ($shifts as $shift) {
+                \App\Models\EventShift::create([
+                    'event_id'  => $event->id,
+                    'starts_at' => $shift['starts_at'],
+                    'ends_at'   => $shift['ends_at'],
                 ]);
             }
             // Raggruppa staff per periodi
@@ -154,6 +186,7 @@ class EventController extends Controller{
             }
             $eventData = $event->toArray();
             $eventData['staff'] = array_values($staffGrouped);
+            $eventData['shifts'] = \App\Models\EventShift::where('event_id', $event->id)->orderBy('starts_at')->get();
             DB::commit();
             return response()->json($eventData, 201);
         } catch (\Exception $e) {
@@ -183,7 +216,8 @@ class EventController extends Controller{
             DB::beginTransaction();
             $data = $request->validated();
             $staffIds = $data['staff_ids'] ?? null;
-            unset($data['staff_ids']);
+            $shifts   = $data['shifts'] ?? null;
+            unset($data['staff_ids'], $data['shifts']);
             $event->update($data);
             if ($staffIds !== null) {
                 // Prendi tutti i record attivi (non soft deleted)
@@ -213,6 +247,17 @@ class EventController extends Controller{
                         $es->delete();
                         $es->save();
                     }
+                }
+            }
+            // Aggiorna turni (null = non toccare, array = sostituisci tutti)
+            if ($shifts !== null) {
+                \App\Models\EventShift::where('event_id', $event->id)->delete();
+                foreach ($shifts as $shift) {
+                    \App\Models\EventShift::create([
+                        'event_id'  => $event->id,
+                        'starts_at' => $shift['starts_at'],
+                        'ends_at'   => $shift['ends_at'],
+                    ]);
                 }
             }
             // Raggruppa staff per periodi
@@ -247,6 +292,7 @@ class EventController extends Controller{
             }
             $eventData = $event->toArray();
             $eventData['staff'] = array_values($staffGrouped);
+            $eventData['shifts'] = \App\Models\EventShift::where('event_id', $event->id)->orderBy('starts_at')->get();
             DB::commit();
             return response()->json($eventData);
         } catch (\Exception $e) {
@@ -298,11 +344,17 @@ class EventController extends Controller{
                 $isActive = is_null($es->removed_at) && is_null($es->deleted_at);
                 if ($isActive) {
                     $staffGrouped[$id]['is_currently_present'] = true;
-                    $staffGrouped[$id]['is_on_break'] = $es->status === 'break';
+                    $isOnBreak = $es->status === 'break';
+                    $staffGrouped[$id]['is_on_break'] = $isOnBreak;
+                    if ($isOnBreak) {
+                        $activeBreak = $es->breaks()->whereNull('ended_at')->latest('started_at')->first();
+                        $staffGrouped[$id]['break_started_at'] = $activeBreak ? $activeBreak->started_at : null;
+                    }
                 }
             }
             $eventData = $event->toArray();
             $eventData['staff'] = array_values($staffGrouped);
+            $eventData['shifts'] = $event->shifts()->orderBy('starts_at')->get();
             return response()->json($eventData);
         } catch (\Exception $e) {
             return response()->json([

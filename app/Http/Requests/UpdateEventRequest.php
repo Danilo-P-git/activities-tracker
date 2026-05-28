@@ -20,8 +20,11 @@ class UpdateEventRequest extends FormRequest
             'event_start_date' => 'sometimes|required|date',
             'event_end_date' => 'sometimes|required|date|after_or_equal:event_start_date',
             'location' => 'nullable|string|max:255',
-            'staff_ids' => 'nullable|array',
-            'staff_ids.*' => 'integer|exists:staff,id',
+            'staff_ids'          => 'nullable|array',
+            'staff_ids.*'         => 'integer|exists:staff,id',
+            'shifts'              => 'nullable|array',
+            'shifts.*.starts_at'  => 'required_with:shifts|date',
+            'shifts.*.ends_at'    => 'required_with:shifts|date|after:shifts.*.starts_at',
         ];
     }
 

@@ -9,9 +9,11 @@ type StaffType = {
   full_name: string;
   is_available: boolean | string | number;
   is_on_break?: boolean;
+  break_started_at?: string | null;
   is_currently_present?: boolean;
   status?: string;
   updated_at?: string | null;
+  groups_today?: number;
 };
 
 type GroupType = {
@@ -29,6 +31,7 @@ type GroupType = {
   staff?: StaffType;
   created_at?: string;
   updated_at?: string;
+  activity_started_at?: string | null;
 };
 
 // Componente timer per gruppo con doppia modalità
@@ -47,9 +50,10 @@ const GroupTimer: React.FC<{ group: GroupType }> = ({ group }) => {
     const sec = Math.floor((elapsed % 60000) / 1000);
     return <span className="text-yellow-600 font-bold">Sta aspettando da {min}:{sec.toString().padStart(2, '0')}</span>;
   } else {
-    // Timer countdown da updated_at
-    if (!group.activity_duration || !group.updated_at) return null;
-    const start = new Date(group.updated_at).getTime();
+    // Timer countdown da activity_started_at (fallback: updated_at)
+    const startTime = group.activity_started_at ?? group.updated_at;
+    if (!group.activity_duration || !startTime) return null;
+    const start = new Date(startTime).getTime();
     const durationMs = group.activity_duration * 60 * 1000;
     const elapsed = now - start;
     const isExpired = elapsed > durationMs;
@@ -79,6 +83,7 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
   const [eventStaffIds, setEventStaffIds] = useState<number[]>([]);
   const [closedGroups, setClosedGroups] = useState<GroupType[]>([]);
   const [showClosed, setShowClosed] = useState(false);
+  const [showStaff, setShowStaff] = useState(true);
   const [eventInfo, setEventInfo] = useState<{
     event_name: string;
     event_start_date?: string;
@@ -148,6 +153,19 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
       // Se non è stato ancora impostato un valore di durata, usalo come default
       setForm(f => ({ ...f, activity_duration: f.activity_duration ?? (Number(res.data.durata_media_gruppo) || DEFAULT_DURATION) }));
     });
+  }, [eventId]);
+
+  // Polling: aggiorna staff e gruppi ogni 30 secondi per monitoraggio continuo
+  useEffect(() => {
+    const pollStaff = () =>
+      axios.get(`/api/events/${eventId}/staff`, { withCredentials: true }).then(res => setEventStaffList(res.data));
+    const pollGroups = () =>
+      axios.get('/api/groups', { params: { event_id: eventId }, withCredentials: true }).then(res => setGroups(res.data));
+    const interval = setInterval(() => {
+      pollStaff();
+      pollGroups();
+    }, 30000);
+    return () => clearInterval(interval);
   }, [eventId]);
 
   function fetchGroups() {
@@ -266,46 +284,59 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
       {/* Sezione staff evento */}
       {eventStaffList.length > 0 && (
         <div className="mb-8 bg-card border border-border rounded-xl p-4">
-          <h3 className="font-bold text-primary mb-2">Staff dell'evento</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-muted-foreground">
-                <th className="text-left p-2">Nome</th>
-                <th className="text-left p-2">In pausa</th>
-                <th className="text-left p-2">Stato</th>
-              </tr>
-            </thead>
-            <tbody>
-              {eventStaffList.map(staff => (
-                <tr key={staff.id} className="border-b border-border last:border-0">
-                  <td className="p-2 font-medium">{staff.full_name}</td>
-                  <td className="p-2">
-                    <input
-                      type="checkbox"
-                      checked={staff.is_on_break ?? false}
-                      disabled={!staff.is_currently_present}
-                      title={!staff.is_currently_present ? 'Lo staff è attualmente assente dall\'evento' : undefined}
-                      onChange={async () => {
-                        const newStatus = staff.is_on_break ? 'active' : 'break';
-                        await axios.put(`/api/events/${eventId}/staff/${staff.id}/status`, { status: newStatus }, { withCredentials: true });
-                        // Aggiorna lista staff evento
-                        axios.get(`/api/events/${eventId}/staff`, { withCredentials: true }).then(res => setEventStaffList(res.data));
-                      }}
-                    />
-                  </td>
-                  <td className="p-2">
-                    {!staff.is_currently_present ? (
-                      <span className="text-xs text-muted-foreground font-semibold">Assente</span>
-                    ) : staff.is_on_break ? (
-                      <span className="text-xs text-orange-500 font-semibold">In pausa</span>
-                    ) : (
-                      <span className="text-xs text-green-600 font-semibold">Disponibile</span>
-                    )}
-                  </td>
+          <button
+            className="w-full flex items-center justify-between text-left mb-2"
+            onClick={() => setShowStaff(v => !v)}
+          >
+            <h3 className="font-bold text-primary">Staff dell'evento</h3>
+            <span className="text-primary text-sm">{showStaff ? '▲' : '▼'}</span>
+          </button>
+          {showStaff && (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-muted-foreground">
+                  <th className="text-left p-2">Nome</th>
+                  <th className="text-left p-2">In pausa</th>
+                  <th className="text-left p-2">Stato</th>
+                  <th className="text-left p-2">Gruppi oggi</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {eventStaffList.map(staff => (
+                  <tr key={staff.id} className="border-b border-border last:border-0">
+                    <td className="p-2 font-medium">{staff.full_name}</td>
+                    <td className="p-2">
+                      <input
+                        type="checkbox"
+                        checked={staff.is_on_break ?? false}
+                        disabled={!staff.is_currently_present}
+                        title={!staff.is_currently_present ? 'Lo staff è attualmente assente dall\'evento' : undefined}
+                        onChange={async () => {
+                          const newStatus = staff.is_on_break ? 'active' : 'break';
+                          await axios.put(`/api/events/${eventId}/staff/${staff.id}/status`, { status: newStatus }, { withCredentials: true });
+                          axios.get(`/api/events/${eventId}/staff`, { withCredentials: true }).then(res => setEventStaffList(res.data));
+                        }}
+                      />
+                    </td>
+                    <td className="p-2">
+                      {!staff.is_currently_present ? (
+                        <span className="text-xs text-muted-foreground font-semibold">Assente</span>
+                      ) : staff.is_on_break ? (
+                        <span className="text-xs text-orange-500 font-semibold">
+                          In pausa{staff.break_started_at ? ` ${Math.floor((Date.now() - new Date(staff.break_started_at).getTime()) / 60000)}m` : ''}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-green-600 font-semibold">Disponibile</span>
+                      )}
+                    </td>
+                    <td className="p-2 tabular-nums font-semibold text-primary">
+                      {staff.groups_today ?? 0}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
       {showForm && (
@@ -389,11 +420,16 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                     </Listbox.Option>
                     {staffList.filter(staff => eventStaffIds.includes(staff.id)).map((staff) => {
                       const isPresent = eventStaffList.find(es => es.id === staff.id)?.is_currently_present !== false;
+                      const esRecord = eventStaffList.find(es => es.id === staff.id);
+                      const isOnBreak = esRecord?.is_on_break === true;
+                      const breakMinutes = isOnBreak && esRecord?.break_started_at
+                        ? Math.floor((Date.now() - new Date(esRecord.break_started_at).getTime()) / 60000)
+                        : null;
                       return (
                         <Listbox.Option
                           key={staff.id}
                           value={staff.id}
-                          disabled={!isStaffAvailable(staff.is_available) || !isPresent}
+                          disabled={!isStaffAvailable(staff.is_available) || !isPresent || isOnBreak}
                           className={({ active, selected, disabled }) =>
                             [
                               'relative select-none py-2 pl-10 pr-4 transition',
@@ -405,10 +441,12 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                         >
                           {({ selected }) => (
                             <>
-                              <span className={`block truncate ${selected ? 'font-bold' : ''} ${!isPresent ? 'line-through' : ''}`}>{staff.full_name}</span>
-                              {!isPresent ? (
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-xs">Assente</span>
-                              ) : selected ? (
+                              <span className={`block truncate ${selected ? 'font-bold' : ''}`}>
+                                {isOnBreak && <span className="text-orange-400">In pausa{breakMinutes !== null ? ` ${breakMinutes}m` : ''} </span>}
+                                {!isPresent && !isOnBreak && <span className="text-muted-foreground">Assente </span>}
+                                {staff.full_name}
+                              </span>
+                              {!isOnBreak && isPresent && selected ? (
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
                                   <CheckIcon className="h-5 w-5" aria-hidden="true" />
                                 </span>
@@ -622,6 +660,8 @@ const GroupListItem: React.FC<{
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [pickStaffOpen, setPickStaffOpen] = useState(false);
+  const [pickStaffShaking, setPickStaffShaking] = useState(false);
+  const triggerPickStaffShake = () => { if (pickStaffShaking) return; setPickStaffShaking(true); setTimeout(() => setPickStaffShaking(false), 450); };
   const [pickedStaffId, setPickedStaffId] = useState<number | null>(null);
   const [pickStaffLoading, setPickStaffLoading] = useState(false);
 
@@ -695,8 +735,9 @@ const GroupListItem: React.FC<{
   let borderClass = 'border-border';
   const bgClass = 'bg-card';
   // Gruppo "da chiamare" (scaduto)
-  const isExpired = !group.is_friend && group.activity_duration && group.updated_at && (() => {
-    const start = new Date(group.updated_at).getTime();
+  const startTimeForExpiry = group.activity_started_at ?? group.updated_at;
+  const isExpired = !group.is_friend && group.activity_duration && startTimeForExpiry && (() => {
+    const start = new Date(startTimeForExpiry).getTime();
     const durationMs = group.activity_duration * 60 * 1000;
     const elapsed = Date.now() - start;
     return elapsed > durationMs;
@@ -773,11 +814,16 @@ const GroupListItem: React.FC<{
                     </Listbox.Option>
                     {staffList.filter(staff => eventStaffIds.includes(staff.id)).map((staff) => {
                       const isPresent = eventStaffList.find(es => es.id === staff.id)?.is_currently_present !== false;
+                      const esRecord = eventStaffList.find(es => es.id === staff.id);
+                      const isOnBreak = esRecord?.is_on_break === true;
+                      const breakMinutes = isOnBreak && esRecord?.break_started_at
+                        ? Math.floor((Date.now() - new Date(esRecord.break_started_at).getTime()) / 60000)
+                        : null;
                       return (
                         <Listbox.Option
                           key={staff.id}
                           value={staff.id}
-                          disabled={!isStaffAvailable(staff.is_available) || !isPresent}
+                          disabled={!isStaffAvailable(staff.is_available) || !isPresent || isOnBreak}
                           className={({ active, selected, disabled }) =>
                             [
                               'relative select-none py-2 pl-10 pr-4 transition',
@@ -789,10 +835,12 @@ const GroupListItem: React.FC<{
                         >
                           {({ selected }) => (
                             <>
-                              <span className={`block truncate ${selected ? 'font-bold' : ''} ${!isPresent ? 'line-through' : ''}`}>{staff.full_name}</span>
-                              {!isPresent ? (
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-xs">Assente</span>
-                              ) : selected ? (
+                              <span className={`block truncate ${selected ? 'font-bold' : ''}`}>
+                                {isOnBreak && <span className="text-orange-400">In pausa{breakMinutes !== null ? ` ${breakMinutes}m` : ''} </span>}
+                                {!isPresent && !isOnBreak && <span className="text-muted-foreground">Assente </span>}
+                                {staff.full_name}
+                              </span>
+                              {!isOnBreak && isPresent && selected ? (
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
                                   <CheckIcon className="h-5 w-5" aria-hidden="true" />
                                 </span>
@@ -865,11 +913,11 @@ const GroupListItem: React.FC<{
     </li>
     {pickStaffOpen && (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        onClick={() => setPickStaffOpen(false)}
+        className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 py-4"
+        onClick={triggerPickStaffShake}
       >
         <div
-          className="bg-card border border-border rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4"
+          className={`bg-card border border-border rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 my-auto max-h-[90vh] overflow-y-auto${pickStaffShaking ? ' modal-shake' : ''}`}
           onClick={e => e.stopPropagation()}
         >
           <h3 className="text-lg font-bold text-primary mb-1">Attiva gruppo</h3>
@@ -894,11 +942,16 @@ const GroupListItem: React.FC<{
                   .filter(s => eventStaffIds.includes(s.id))
                   .map(staff => {
                     const isPresent = eventStaffList.find(es => es.id === staff.id)?.is_currently_present !== false;
+                    const esRecord = eventStaffList.find(es => es.id === staff.id);
+                    const isOnBreak = esRecord?.is_on_break === true;
+                    const breakMinutes = isOnBreak && esRecord?.break_started_at
+                      ? Math.floor((Date.now() - new Date(esRecord.break_started_at).getTime()) / 60000)
+                      : null;
                     return (
                       <Listbox.Option
                         key={staff.id}
                         value={staff.id}
-                        disabled={!isPresent || !isStaffAvailable(staff.is_available)}
+                        disabled={!isPresent || isOnBreak || !isStaffAvailable(staff.is_available)}
                         className={({ active, selected, disabled }) =>
                           [
                             'relative select-none py-2 pl-10 pr-4 transition',
@@ -910,10 +963,12 @@ const GroupListItem: React.FC<{
                       >
                         {({ selected }) => (
                           <>
-                            <span className={`block truncate ${selected ? 'font-bold' : ''} ${!isPresent ? 'line-through' : ''}`}>{staff.full_name}</span>
-                            {!isPresent ? (
-                              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-xs">Assente</span>
-                            ) : selected ? (
+                            <span className={`block truncate ${selected ? 'font-bold' : ''}`}>
+                              {isOnBreak && <span className="text-orange-400">In pausa{breakMinutes !== null ? ` ${breakMinutes}m` : ''} </span>}
+                              {!isPresent && !isOnBreak && <span className="text-muted-foreground">Assente </span>}
+                              {staff.full_name}
+                            </span>
+                            {!isOnBreak && isPresent && selected ? (
                               <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
                                 <CheckIcon className="h-5 w-5" />
                               </span>

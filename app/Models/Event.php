@@ -31,6 +31,11 @@ class Event extends Model
         'location',
     ];
 
+    public function shifts()
+    {
+        return $this->hasMany(EventShift::class)->orderBy('starts_at');
+    }
+
     public function groups()
     {
         return $this->hasMany(Group::class);

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MenuBar from '../components/MenuBar';
 import axios from 'axios';
 import { Dialog, Transition } from '@headlessui/react';
-import { PlusIcon, CheckIcon, PencilSquareIcon } from '@heroicons/react/24/solid';
+import { PlusIcon, CheckIcon } from '@heroicons/react/24/solid';
 
 // AGGIUNGI: StaffType per supporto staff in modale e edit
 
@@ -16,10 +16,17 @@ type StaffType = {
   full_name: string;
   is_available?: string;
   is_busy?: string;
+  is_on_break?: boolean;
+  break_started_at?: string | null;
   created_at?: string;
   updated_at?: string;
   deleted_at?: string | null;
   periods?: StaffPeriod[];
+};
+type ShiftType = {
+  id?: number;
+  starts_at: string;
+  ends_at: string;
 };
 
 type EventType = {
@@ -30,13 +37,14 @@ type EventType = {
   event_end_date: string;
   location: string;
   staff?: StaffType[];
+  shifts?: ShiftType[];
 };
 
 // Card evento in evidenza
-function FeaturedEventCard({ event, onClick }: { event: EventType; onClick: () => void }) {
+function FeaturedEventCard({ event, onEdit, onDelete }: { event: EventType; onEdit: () => void; onDelete: () => void }) {
   if (!event) return null;
   return (
-    <div className="bg-primary/10 border-2 border-primary rounded-3xl shadow-2xl p-10 mb-10 flex flex-col md:flex-row items-center gap-10 cursor-pointer hover:shadow-3xl transition min-h-[220px]" onClick={onClick}>
+    <div className="bg-primary/10 border-2 border-primary rounded-3xl shadow-2xl p-10 mb-10 flex flex-col md:flex-row items-center gap-10 min-h-[220px]">
       <div className="flex-1 min-w-0">
         <h2 className="text-3xl md:text-4xl font-extrabold text-primary mb-4 flex items-center gap-3"> In evidenza</h2>
         <h2 className="text-3xl md:text-4xl font-extrabold text-primary mb-4 flex items-center gap-3">
@@ -48,11 +56,18 @@ function FeaturedEventCard({ event, onClick }: { event: EventType; onClick: () =
           <span className="bg-primary text-background px-3 py-1.5 rounded-lg font-bold text-lg">
             {new Date(event.event_start_date).toLocaleString()}<span className="mx-1">→</span>{new Date(event.event_end_date).toLocaleString()}
           </span>
-          <span className="bg-card text-primary px-3 py-1.5 rounded-lg font-semibold border border-primary text-lg">{event.location}</span>
+          {event.location && (
+            <span className="bg-card text-primary px-3 py-1.5 rounded-lg font-semibold border border-primary text-lg">{event.location}</span>
+          )}
         </div>
       </div>
-      <div className="flex-shrink-0 hidden md:block">
-        <PencilSquareIcon className="w-16 h-16 text-primary opacity-30" />
+      <div className="flex-shrink-0 flex flex-col gap-3 mt-6 md:mt-0">
+        <button onClick={onEdit} className="bg-primary hover:bg-secondary text-background rounded-lg px-5 py-2.5 font-bold transition text-sm w-full">
+          Modifica
+        </button>
+        <button onClick={onDelete} className="bg-red-500 hover:bg-red-700 text-white rounded-lg px-5 py-2.5 font-bold transition text-sm w-full">
+          Elimina
+        </button>
       </div>
     </div>
   );
@@ -60,27 +75,32 @@ function FeaturedEventCard({ event, onClick }: { event: EventType; onClick: () =
 
 function EventInfoModal({ open, onClose, event, onEdit }: { open: boolean; onClose: () => void; event: EventType | null; onEdit: () => void }) {
   const [staff, setStaff] = useState<StaffType[]>([]);
+  const [shifts, setShifts] = useState<ShiftType[]>([]);
+  const [shaking, setShaking] = useState(false);
+  const triggerShake = () => { if (shaking) return; setShaking(true); setTimeout(() => setShaking(false), 450); };
   useEffect(() => {
     if (open && event?.id) {
       axios.get(`/api/events/${event.id}`, { withCredentials: true }).then(res => {
         setStaff(res.data.staff || []);
+        setShifts(res.data.shifts || []);
       });
     } else {
       setStaff([]);
+      setShifts([]);
     }
   }, [open, event]);
   if (!event) return null;
   return (
     <Transition show={open} as={React.Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
+      <Dialog as="div" className="relative z-50" onClose={triggerShake}>
         <div className="fixed inset-0 bg-black/40 z-40" />
-        <div className="fixed inset-0 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 flex items-center justify-center p-4 z-50 overflow-y-auto">
           <Transition.Child
             as={React.Fragment}
             enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
             leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
           >
-            <Dialog.Panel className="bg-card rounded-2xl p-8 w-full max-w-md shadow-xl relative border border-border">
+            <Dialog.Panel className={`bg-card rounded-2xl p-8 w-[75vw] shadow-xl relative border border-border my-auto overflow-y-auto max-h-[90vh]${shaking ? ' modal-shake' : ''}`}>
               <button className="absolute top-3 right-3 text-muted-foreground hover:text-primary text-2xl" onClick={onClose}>&times;</button>
               <Dialog.Title className="text-2xl font-bold mb-4 text-primary">{event.event_name}</Dialog.Title>
               <div className="text-base text-muted-foreground mb-4">{event.description}</div>
@@ -89,33 +109,106 @@ function EventInfoModal({ open, onClose, event, onEdit }: { open: boolean; onClo
                 <span className="text-secondary font-semibold">Fine: <span className="text-foreground">{new Date(event.event_end_date).toLocaleString()}</span></span>
                 <span className="text-secondary font-semibold">Luogo: <span className="text-foreground">{event.location}</span></span>
               </div>
+              {shifts.length > 0 && (
+                <div className="mb-4">
+                  <div className="font-bold text-primary mb-2">Turni:</div>
+                  {Object.entries(
+                    shifts.reduce((acc, s) => {
+                      const date = new Date(s.starts_at).toLocaleDateString('it-IT');
+                      if (!acc[date]) acc[date] = [];
+                      acc[date].push(s);
+                      return acc;
+                    }, {} as Record<string, ShiftType[]>)
+                  ).map(([date, dayShifts]) => (
+                    <div key={date} className="mb-2">
+                      <div className="text-sm font-semibold text-foreground">{date}</div>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {dayShifts.map((s, i) => (
+                          <span key={i} className="text-xs bg-primary/10 text-primary border border-primary rounded px-2 py-1">
+                            {new Date(s.starts_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                            {' → '}
+                            {new Date(s.ends_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="mb-4">
-                <div className="font-bold text-primary mb-2">Staff che ha partecipato:</div>
+                <div className="font-bold text-primary mb-2">Staff:</div>
                 {staff.length === 0 ? (
-                  <div className="text-muted-foreground italic">Nessuno staff assegnato</div>
-                ) : (
-                  <ul className="space-y-2">
-                    {staff.map(s => (
-                      <li key={s.id} className="">
-                        <div className="font-semibold text-foreground mb-1">{s.full_name}</div>
-                        <div className="flex flex-wrap gap-2 text-xs">
-                          {s.periods && s.periods.length > 0 ? (
-                            s.periods.map((p, idx) => (
-                              <span key={idx} className={
-                                'inline-block rounded px-2 py-1 ' +
-                                (p.removed_at || p.deleted_at
-                                  ? 'bg-muted-foreground/10 text-muted-foreground border border-muted-foreground'
-                                  : 'bg-primary/10 text-primary border border-primary')
-                              }>
-                                {new Date(p.added_at).toLocaleString()} - {p.removed_at ? new Date(p.removed_at).toLocaleString() : 'presente'}
+                  <div className="text-muted-foreground italic text-sm">Nessuno staff assegnato</div>
+                ) : (() => {
+                  const fmt = (dt: string) => {
+                    const d = new Date(dt);
+                    return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
+                      + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                  };
+                  const renderRows = (slice: StaffType[]) => slice.flatMap(s => {
+                    const periods = s.periods && s.periods.length > 0 ? s.periods : [];
+                    const isCurrentlyPresent = periods.some(p => !p.removed_at && !p.deleted_at);
+                    const isOnBreak = s.is_on_break === true;
+                    const breakMins = isOnBreak && s.break_started_at
+                      ? Math.floor((Date.now() - new Date(s.break_started_at).getTime()) / 60000)
+                      : null;
+                    if (periods.length === 0) {
+                      return [(
+                        <tr key={s.id} className="border-b border-border last:border-0">
+                          <td className="px-3 py-2 font-semibold text-foreground">{s.full_name}</td>
+                          <td className="px-3 py-2 text-muted-foreground" colSpan={2}>—</td>
+                        </tr>
+                      )];
+                    }
+                    return periods.map((p, pi) => {
+                      const active = !p.removed_at && !p.deleted_at;
+                      return (
+                        <tr key={`${s.id}-${pi}`} className="border-b border-border last:border-0">
+                          {pi === 0 && (
+                            <td className="px-3 py-2 font-semibold text-foreground align-middle" rowSpan={periods.length}>
+                              <span className="flex items-center gap-1.5">
+                                {isCurrentlyPresent && !isOnBreak && <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />}
+                                {isOnBreak && <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />}
+                                {s.full_name}
                               </span>
-                            ))
-                          ) : null}
+                            </td>
+                          )}
+                          <td className="px-3 py-2 text-muted-foreground tabular-nums">{fmt(p.added_at)}</td>
+                          <td className={`px-3 py-2 tabular-nums ${active ? (isOnBreak ? 'text-orange-400 font-medium' : 'text-primary font-medium') : 'text-muted-foreground'}`}>
+                            {active
+                              ? isOnBreak
+                                ? `in pausa${breakMins !== null ? ' ' + breakMins + 'm' : ''}`
+                                : 'presente'
+                              : p.removed_at ? fmt(p.removed_at) : '—'}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  });
+                  const thead = (
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Nome</th>
+                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Entrata</th>
+                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Uscita</th>
+                      </tr>
+                    </thead>
+                  );
+                  const col1 = staff.slice(0, 10);
+                  const col2 = staff.slice(10);
+                  return (
+                    <div className={`flex gap-3 ${col2.length > 0 ? 'flex-row' : ''}`}>
+                      <div className="flex-1 overflow-x-auto rounded-lg border border-border">
+                        <table className="w-full text-xs">{thead}<tbody>{renderRows(col1)}</tbody></table>
+                      </div>
+                      {col2.length > 0 && (
+                        <div className="flex-1 overflow-x-auto rounded-lg border border-border">
+                          <table className="w-full text-xs">{thead}<tbody>{renderRows(col2)}</tbody></table>
                         </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               {/*
                 Bottone Modifica: visibile solo se la data di fine evento è futura.
@@ -133,14 +226,13 @@ function EventInfoModal({ open, onClose, event, onEdit }: { open: boolean; onClo
   );
 }
 
-function EventCard({ event, onClick, isFeatured }: { event: EventType; onClick: () => void; isFeatured?: boolean }) {
+function EventCard({ event, onEdit, onDelete, isFeatured }: { event: EventType; onEdit: () => void; onDelete: () => void; isFeatured?: boolean }) {
   return (
     <div
       className={
-        `bg-card rounded-2xl shadow-lg p-6 flex flex-col gap-3 border-2 hover:shadow-2xl transition-shadow duration-200 cursor-pointer min-h-[160px] w-full ` +
+        `bg-card rounded-2xl shadow-lg p-6 flex flex-col gap-3 border-2 hover:shadow-2xl transition-shadow duration-200 min-h-[160px] w-full ` +
         (isFeatured ? 'border-white/90' : 'border-border')
       }
-      onClick={onClick}
     >
       <h3 className="text-lg font-bold text-secondary flex items-center gap-3 truncate">
         <span className="inline-block w-3 h-3 bg-primary rounded-full"></span>
@@ -155,6 +247,14 @@ function EventCard({ event, onClick, isFeatured }: { event: EventType; onClick: 
           Fine: {new Date(event.event_end_date).toLocaleString()}
         </span>
         <span className="bg-primary/20 text-primary px-2 py-1 rounded text-xs font-semibold">{event.location}</span>
+      </div>
+      <div className="flex gap-2 mt-auto pt-2">
+        <button onClick={onEdit} className="flex-1 bg-primary hover:bg-secondary text-background rounded-lg px-3 py-1.5 font-bold transition text-xs">
+          Modifica
+        </button>
+        <button onClick={onDelete} className="flex-1 bg-red-500 hover:bg-red-700 text-white rounded-lg px-3 py-1.5 font-bold transition text-xs">
+          Elimina
+        </button>
       </div>
     </div>
   );
@@ -177,9 +277,12 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
     event_end_date: '',
     location: '',
     staff_ids: [] as number[],
+    shifts: [] as Array<{ starts_at: string; ends_at: string }>,
   });
   const [error, setError] = useState<string | null>(null);
   const [staffList, setStaffList] = useState<StaffType[]>([]);
+  const [shaking, setShaking] = useState(false);
+  const triggerShake = () => { if (shaking) return; setShaking(true); setTimeout(() => setShaking(false), 450); };
 
   // Precompila tutto il form solo su open/editMode/event
   useEffect(() => {
@@ -193,6 +296,10 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
         event_end_date: event.event_end_date ? event.event_end_date.slice(0, 16) : '',
         location: event.location || '',
         staff_ids: staffSource ? staffSource.filter(s => s.periods && s.periods.some(p => !p.removed_at && !p.deleted_at)).map(s => s.id) : [],
+        shifts: event.shifts ? event.shifts.map(s => ({
+          starts_at: s.starts_at.slice(0, 16),
+          ends_at: s.ends_at.slice(0, 16),
+        })) : [],
       });
     } else if (open && !editMode) {
       // Default: oggi alle 8 e oggi alle 20
@@ -209,6 +316,7 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
         event_end_date: today20,
         location: '',
         staff_ids: [],
+        shifts: [],
       });
     }
   }, [open, editMode, event, staffOverride]);
@@ -238,6 +346,23 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
     setForm({ ...form, staff_ids: selected });
   }
 
+  function addShift() {
+    const baseDate = form.event_start_date?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+    setForm(f => ({ ...f, shifts: [...f.shifts, { starts_at: `${baseDate}T10:00`, ends_at: `${baseDate}T13:00` }] }));
+  }
+  function updateShiftDate(idx: number, date: string) {
+    setForm(f => ({ ...f, shifts: f.shifts.map((s, i) => i !== idx ? s : {
+      starts_at: `${date}T${s.starts_at.slice(11, 16)}`,
+      ends_at:   `${date}T${s.ends_at.slice(11, 16)}`,
+    }) }));
+  }
+  function updateShift(idx: number, field: 'starts_at' | 'ends_at', value: string) {
+    setForm(f => ({ ...f, shifts: f.shifts.map((s, i) => i === idx ? { ...s, [field]: value } : s) }));
+  }
+  function removeShift(idx: number) {
+    setForm(f => ({ ...f, shifts: f.shifts.filter((_, i) => i !== idx) }));
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -262,15 +387,15 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
 
   return (
     <Transition show={open} as={React.Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
-        <div className="fixed inset-0 pointer-events-none" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
+      <Dialog as="div" className="relative z-50" onClose={triggerShake}>
+        <div className="fixed inset-0 bg-black/40" />
+        <div className="fixed inset-0 flex items-center justify-center p-4 overflow-y-auto">
           <Transition.Child
             as={React.Fragment}
             enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
             leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
           >
-            <Dialog.Panel className="bg-card rounded-2xl p-8 w-full max-w-md shadow-xl relative border border-border">
+            <Dialog.Panel className={`bg-card rounded-2xl p-8 w-[75vw] shadow-xl relative border border-border my-auto overflow-y-auto max-h-[90vh]${shaking ? ' modal-shake' : ''}`}>
               <button className="absolute top-3 right-3 text-muted-foreground hover:text-primary text-2xl" onClick={onClose}>&times;</button>
               <Dialog.Title className="text-2xl font-bold mb-4 text-primary">{editMode ? 'Modifica Evento' : 'Apri evento'}</Dialog.Title>
               {error && <div className="mb-2 text-accent text-sm">{error}</div>}
@@ -339,6 +464,45 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
                   )}
                   <span className="text-xs text-muted-foreground mt-2 block">Tocca per selezionare / deselezionare</span>
                 </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-foreground">Turni</label>
+                    <button type="button" onClick={addShift} className="text-xs text-primary hover:text-secondary font-semibold border border-primary rounded-lg px-2 py-1 transition">
+                      + Aggiungi turno
+                    </button>
+                  </div>
+                  {form.shifts.length === 0 && (
+                    <p className="text-muted-foreground text-xs italic">Nessun turno. Clicca per aggiungere.</p>
+                  )}
+                  <div className="flex flex-col gap-1.5">
+                    {form.shifts.map((shift, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5 border border-border rounded-lg px-2 py-1.5">
+                        <input
+                          type="date"
+                          value={shift.starts_at.slice(0, 10)}
+                          onChange={e => updateShiftDate(idx, e.target.value)}
+                          className="border border-border bg-background text-foreground rounded px-1.5 py-1 text-sm focus:ring-1 focus:ring-secondary focus:outline-none min-w-0"
+                        />
+                        <input
+                          type="time"
+                          value={shift.starts_at.slice(11, 16)}
+                          onChange={e => updateShift(idx, 'starts_at', `${shift.starts_at.slice(0, 10)}T${e.target.value}`)}
+                          className="border border-border bg-background text-foreground rounded px-1.5 py-1 text-sm focus:ring-1 focus:ring-secondary focus:outline-none w-[5.5rem]"
+                        />
+                        <span className="text-muted-foreground text-xs shrink-0">→</span>
+                        <input
+                          type="time"
+                          value={shift.ends_at.slice(11, 16)}
+                          onChange={e => updateShift(idx, 'ends_at', `${shift.ends_at.slice(0, 10)}T${e.target.value}`)}
+                          className="border border-border bg-background text-foreground rounded px-1.5 py-1 text-sm focus:ring-1 focus:ring-secondary focus:outline-none w-[5.5rem]"
+                        />
+                        <button type="button" onClick={() => removeShift(idx)} className="ml-auto text-red-500 hover:text-red-700 font-bold text-base leading-none shrink-0 pl-1">
+                          &times;
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <button type="submit" className="bg-secondary hover:bg-primary text-background rounded-lg p-2 font-bold transition">Salva</button>
               </form>
             </Dialog.Panel>
@@ -384,12 +548,6 @@ export default function EventListPage() {
     refreshEventsAndFeatured();
   }
 
-  function handleCardClick(event: EventType) {
-    setSelectedEvent(event);
-    setInfoModalOpen(true);
-    setEditMode(false);
-  }
-
   async function handleEdit() {
     if (selectedEvent) {
       // Recupera dati freschi dell'evento (inclusi staff e periods aggiornati)
@@ -397,6 +555,19 @@ export default function EventListPage() {
       setSelectedEvent(res.data);
     }
     setEditMode(true);
+  }
+
+  async function handleFeaturedEdit(ev: EventType) {
+    const res = await axios.get(`/api/events/${ev.id}`, { withCredentials: true });
+    setSelectedEvent(res.data);
+    setInfoModalOpen(true);
+    setEditMode(true);
+  }
+
+  async function handleFeaturedDelete(ev: EventType) {
+    if (!window.confirm(`Eliminare l'evento "${ev.event_name}"?`)) return;
+    await axios.delete(`/api/events/${ev.id}`, { withCredentials: true });
+    refreshEventsAndFeatured();
   }
 
   function handleCloseModal() {
@@ -430,7 +601,7 @@ export default function EventListPage() {
       <div className="min-h-screen bg-background p-4 md:p-8">
       {featuredEvents.length > 0 ? (
         featuredEvents.map(ev => (
-          <FeaturedEventCard key={ev.id} event={ev} onClick={() => handleCardClick(ev)} />
+          <FeaturedEventCard key={ev.id} event={ev} onEdit={() => handleFeaturedEdit(ev)} onDelete={() => handleFeaturedDelete(ev)} />
         ))
       ) : (
         <h2 className="mb-10 text-center text-lg text-primary font-semibold">Nessun evento in evidenza</h2>
@@ -465,7 +636,8 @@ export default function EventListPage() {
           <EventCard
             key={event.id}
             event={event}
-            onClick={() => handleCardClick(event)}
+            onEdit={() => handleFeaturedEdit(event)}
+            onDelete={() => handleFeaturedDelete(event)}
             isFeatured={!!(featuredEvents.find(fev => fev.id === event.id))}
           />
         ))}
