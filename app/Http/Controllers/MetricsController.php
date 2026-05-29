@@ -6,7 +6,9 @@ use App\Models\Event;
 use App\Models\EventShift;
 use App\Models\EventStaff;
 use App\Models\Group;
+use App\Support\StaffMetricsTime;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
 class MetricsController extends Controller
 {
@@ -25,114 +27,26 @@ class MetricsController extends Controller
     public function staffMetrics($eventId)
     {
         try {
-            $now        = Carbon::now();
-            $dateFilter = request()->query('date'); // "YYYY-MM-DD" oppure null
+            $now        = Carbon::now('UTC');
+            $dateFilter = request()->query('date');
+            $scheduleTz = 'Europe/Rome';
 
-            // ── Evento (sempre necessario per availableDates) ─────────────────
             $event = Event::find($eventId);
+            $eventStartAt = $event?->event_start_date
+                ? StaffMetricsTime::asUtcCarbon($event->event_start_date)
+                : null;
+            $eventEndAt = $event?->event_end_date
+                ? StaffMetricsTime::asUtcCarbon($event->event_end_date)
+                : null;
 
-            // ── Finestre dei turni (tutte) ────────────────────────────────────
             $shiftRecords = EventShift::where('event_id', $eventId)
                 ->orderBy('starts_at')
                 ->get();
-
-            if ($shiftRecords->isEmpty()) {
-                if ($event && $event->event_start_date) {
-                    $allShiftWindows = collect([[
-                        'start' => Carbon::parse($event->event_start_date),
-                        'end'   => $event->event_end_date
-                            ? Carbon::parse($event->event_end_date)
-                            : $now,
-                    ]]);
-                } else {
-                    $allShiftWindows = null;
-                }
-            } else {
-                $allShiftWindows = $shiftRecords->map(fn($s) => [
-                    'start' => Carbon::parse($s->starts_at),
-                    'end'   => Carbon::parse($s->ends_at),
-                ]);
-            }
-
-            // ── Giorni disponibili per le tab (sempre dal range evento) ──────
-            $availableDates = [];
-            if ($event && $event->event_start_date) {
-                $cur    = Carbon::parse($event->event_start_date)->startOfDay();
-                $dayEnd = $event->event_end_date
-                    ? Carbon::parse($event->event_end_date)->startOfDay()
-                    : $cur->copy();
-                while ($cur->lte($dayEnd)) {
-                    $availableDates[] = $cur->toDateString();
-                    $cur->addDay();
-                }
-            }
-
-            // ── Filtra le finestre al singolo giorno richiesto ────────────────
-            // I boundary del giorno usano il timezone locale (Europe/Rome) perché
-            // il dateFilter è una data locale del client. L'app gira in UTC, ma
-            // la mezzanotte locale è 22:00 UTC del giorno precedente.
-            if ($dateFilter !== null) {
-                $localTz  = 'Europe/Rome';
-                $dayStart = Carbon::parse($dateFilter, $localTz)->startOfDay();
-                $dayEnd   = Carbon::parse($dateFilter, $localTz)->endOfDay();
-                if ($allShiftWindows !== null) {
-                    $dayWindows = [];
-                    foreach ($allShiftWindows as $w) {
-                        $oStart = max($w['start']->timestamp, $dayStart->timestamp);
-                        $oEnd   = min($w['end']->timestamp, $dayEnd->timestamp);
-                        if ($oEnd > $oStart) {
-                            $dayWindows[] = [
-                                'start' => Carbon::createFromTimestamp($oStart),
-                                'end'   => Carbon::createFromTimestamp($oEnd),
-                            ];
-                        }
-                    }
-                    $shiftWindows = !empty($dayWindows)
-                        ? collect($dayWindows)
-                        : collect([['start' => $dayStart, 'end' => $dayEnd]]);
-                } else {
-                    $shiftWindows = collect([['start' => $dayStart, 'end' => $dayEnd]]);
-                }
-            } else {
-                $shiftWindows = $allShiftWindows;
-            }
-
-            // ── Helper: secondi di overlap tra [s1,e1] e [s2,e2] ─────────────
-            $overlapSec = function (Carbon $s1, Carbon $e1, Carbon $s2, Carbon $e2): int {
-                $oStart = max($s1->timestamp, $s2->timestamp);
-                $oEnd   = min($e1->timestamp, $e2->timestamp);
-                return max(0, $oEnd - $oStart);
-            };
-
-            // ── Helper: secondi di un periodo [start,end] dentro i turni ──────
-            $periodInWindows = function (Carbon $start, Carbon $end) use ($shiftWindows, $overlapSec): int {
-                if ($shiftWindows === null) {
-                    return max(0, $end->timestamp - $start->timestamp);
-                }
-                $total = 0;
-                foreach ($shiftWindows as $w) {
-                    $total += $overlapSec($start, $end, $w['start'], $w['end']);
-                }
-                return $total;
-            };
-
-            // ── Totale secondi turni per il giorno selezionato ────────────────
-            $totalShiftSeconds = 0;
-            if ($shiftWindows !== null) {
-                foreach ($shiftWindows as $w) {
-                    $totalShiftSeconds += max(0, $w['end']->timestamp - $w['start']->timestamp);
-                }
-            }
-
-            // ── Secondi di turno già trascorsi (fino ad ora) ─────────────────
-            // Usato per idle: non si può essere "idle" nel futuro del turno.
-            $elapsedShiftSeconds = 0;
-            if ($shiftWindows !== null) {
-                foreach ($shiftWindows as $w) {
-                    $elapsed = max(0, min($w['end']->timestamp, $now->timestamp) - $w['start']->timestamp);
-                    $elapsedShiftSeconds += $elapsed;
-                }
-            }
+            $allShiftWindows = StaffMetricsTime::resolveShiftWindows($eventStartAt, $eventEndAt, $shiftRecords, $now);
+            $availableDates = StaffMetricsTime::availableDates($eventStartAt, $eventEndAt, $scheduleTz);
+            $shiftWindows = StaffMetricsTime::filterShiftWindowsByDate($allShiftWindows, $dateFilter, $scheduleTz);
+            $totalShiftSeconds = StaffMetricsTime::totalShiftSeconds($shiftWindows);
+            $elapsedShiftSeconds = StaffMetricsTime::elapsedShiftSeconds($shiftWindows, $now);
 
             // ── Periodi di presenza staff (per breaks e days_present) ──────────
             $allPeriods = EventStaff::withTrashed()
@@ -156,7 +70,7 @@ class MetricsController extends Controller
                 ->get()
                 ->groupBy('staff_id');
 
-            $metrics      = [];
+            $metrics = [];
             $allEventDays = [];
 
             foreach ($allPeriods as $staffId => $periods) {
@@ -164,78 +78,17 @@ class MetricsController extends Controller
                 if (!$staffModel) {
                     continue;
                 }
-
-                // ── "In arena" = attività completate ──────────────────────────
-                // Durata reale: closed_at − activity_started_at (in secondi).
-                // Fallback su activity_duration × 60 se closed_at non disponibile.
-                // Gruppi friend (durata indefinita) e gruppi in attesa esclusi.
-                $staffGroups        = $groupsByStaff->get($staffId, collect());
-                $activityCount      = $staffGroups->count();
-                $timeInArenaSeconds = (int) $staffGroups->sum(function ($group) {
-                    if ($group->is_friend) {
-                        return 0;
-                    }
-                    if ($group->closed_at && $group->activity_started_at) {
-                        // Durata reale misurata
-                        return max(0, $group->closed_at->timestamp - $group->activity_started_at->timestamp);
-                    }
-                    if (!is_null($group->activity_duration)) {
-                        // Stima indicativa come fallback
-                        return $group->activity_duration * 60;
-                    }
-                    return 0;
-                });
-
-                // ── Tempo in pausa (intersezione con turni) ───────────────────
-                $timeBreaksSeconds = 0;
-                foreach ($periods as $period) {
-                    foreach ($period->breaks as $break) {
-                        $bStart = Carbon::parse($break->started_at);
-                        $bEnd   = $break->ended_at ? Carbon::parse($break->ended_at) : $now;
-                        // Safeguard: se started_at > ended_at (bug timezone: ora locale salvata come UTC),
-                        // scambia i due estremi per ottenere la durata corretta.
-                        if ($bEnd->timestamp < $bStart->timestamp) {
-                            [$bStart, $bEnd] = [$bEnd, $bStart];
-                        }
-                        $timeBreaksSeconds += $periodInWindows($bStart, $bEnd);
-                    }
-                }
-
-                // ── Idle = turni trascorsi − arena − pause ────────────────────
-                $timeIdleSeconds = max(0, $elapsedShiftSeconds - $timeInArenaSeconds - $timeBreaksSeconds);
-
-                // ── Giorni di presenza (intersezione con turni) ───────────────
-                $staffDays = [];
-                foreach ($periods as $period) {
-                    if (is_null($period->added_at)) {
-                        continue;
-                    }
-                    $presStart = Carbon::parse($period->added_at);
-                    $presEnd   = !is_null($period->removed_at)
-                        ? Carbon::parse($period->removed_at)
-                        : (!is_null($period->deleted_at) ? Carbon::parse($period->deleted_at) : $now);
-
-                    $windows = $shiftWindows ?? collect([[
-                        'start' => $presStart,
-                        'end'   => $presEnd,
-                    ]]);
-
-                    foreach ($windows as $w) {
-                        $oStart = max($presStart->timestamp, $w['start']->timestamp);
-                        $oEnd   = min($presEnd->timestamp, $w['end']->timestamp);
-                        if ($oEnd <= $oStart) {
-                            continue;
-                        }
-                        $cur    = Carbon::createFromTimestamp($oStart)->startOfDay();
-                        $dayEnd = Carbon::createFromTimestamp($oEnd)->startOfDay();
-                        while ($cur->lte($dayEnd)) {
-                            $dateStr               = $cur->toDateString();
-                            $staffDays[$dateStr]   = true;
-                            $allEventDays[$dateStr] = true;
-                            $cur->addDay();
-                        }
-                    }
-                }
+                $staffGroups = $groupsByStaff->get($staffId, collect());
+                $activityCount = $staffGroups->count();
+                $timeInArenaSeconds = StaffMetricsTime::timeInArenaSeconds($staffGroups);
+                $timeBreaksSeconds = StaffMetricsTime::timeBreaksSeconds($periods, $shiftWindows, $now);
+                $timeIdleSeconds = StaffMetricsTime::timeIdleSeconds(
+                    $elapsedShiftSeconds,
+                    $timeInArenaSeconds,
+                    $timeBreaksSeconds
+                );
+                [$staffDays, $presenceDays] = StaffMetricsTime::collectPresenceDays($periods, $shiftWindows, $now);
+                $allEventDays = array_values(array_unique([...$allEventDays, ...$presenceDays]));
 
                 $metrics[] = [
                     'id'                      => $staffModel->id,

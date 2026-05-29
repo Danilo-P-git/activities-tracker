@@ -90,7 +90,12 @@ export default function MetricsPage() {
     const dates = computeEventDates(event.event_start_date, event.event_end_date);
     setAvailableDates(dates);
     const saved = localStorage.getItem(`metrics_sel_${selectedEventId}`);
-    const initial = saved && dates.includes(saved) ? saved : (dates[0] ?? null);
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const todayKey = today.toISOString().slice(0, 10);
+    const initial = saved && dates.includes(saved)
+      ? saved
+      : (dates.includes(todayKey) ? todayKey : (dates[0] ?? null));
     setSelectedDate(initial);
   }, [selectedEventId, events]);
 
@@ -246,13 +251,9 @@ export default function MetricsPage() {
                         <div className="text-foreground">{formatDuration(arenaTotal)}</div>
                       </td>
                       <td className="px-5 py-3 text-right">
-                        {s.time_breaks_seconds > 0 ? (
-                          <span className="text-orange-500 font-medium">
-                            {formatDuration(s.time_breaks_seconds)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        <span className={s.time_breaks_seconds > 0 ? 'text-orange-500 font-medium' : 'text-muted-foreground'}>
+                          {formatDuration(s.time_breaks_seconds)}
+                        </span>
                       </td>
                       <td className="px-5 py-3 text-right">
                         {s.time_idle_seconds > 0 ? (

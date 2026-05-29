@@ -6,7 +6,9 @@ use App\Http\Requests\StoreEventRequest;
 use App\Http\Requests\UpdateEventRequest;
 
 use App\Models\Event;
+use App\Models\EventShift;
 use App\Models\EventStaff;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -16,6 +18,37 @@ use Illuminate\Support\Facades\DB;
  * )
  */
 class EventController extends Controller{
+    private function toUtcDateTimeString(?string $value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+
+        return Carbon::parse($value, 'Europe/Rome')->utc()->format('Y-m-d H:i:s');
+    }
+
+    private function normalizeEventSchedulePayload(array $data): array
+    {
+        if (array_key_exists('event_start_date', $data)) {
+            $data['event_start_date'] = $this->toUtcDateTimeString($data['event_start_date']);
+        }
+
+        if (array_key_exists('event_end_date', $data)) {
+            $data['event_end_date'] = $this->toUtcDateTimeString($data['event_end_date']);
+        }
+
+        if (isset($data['shifts']) && is_array($data['shifts'])) {
+            $data['shifts'] = array_map(function ($shift) {
+                return [
+                    'starts_at' => $this->toUtcDateTimeString($shift['starts_at'] ?? null),
+                    'ends_at' => $this->toUtcDateTimeString($shift['ends_at'] ?? null),
+                ];
+            }, $data['shifts']);
+        }
+
+        return $data;
+    }
+
     /**
      * @OA\Get(
      *     path="/api/events",
@@ -131,10 +164,12 @@ class EventController extends Controller{
     {
         try {
             DB::beginTransaction();
-            $data = $request->validated();
+            $data = $this->normalizeEventSchedulePayload($request->validated());
             $staffIds = $data['staff_ids'] ?? [];
             $shifts   = $data['shifts'] ?? [];
             unset($data['staff_ids'], $data['shifts']);
+
+            $utcTimestamp = Carbon::now('UTC')->format('Y-m-d H:i:s');
 
             $event = Event::create($data);
             // Inserisci manualmente staff con added_at
@@ -142,13 +177,13 @@ class EventController extends Controller{
                 EventStaff::create([
                     'event_id' => $event->id,
                     'staff_id' => $staffId,
-                    'added_at' => now(),
+                    'added_at' => $utcTimestamp,
                     'status'   => 'active',
                 ]);
             }
             // Inserisci turni
             foreach ($shifts as $shift) {
-                \App\Models\EventShift::create([
+                EventShift::create([
                     'event_id'  => $event->id,
                     'starts_at' => $shift['starts_at'],
                     'ends_at'   => $shift['ends_at'],
@@ -186,7 +221,7 @@ class EventController extends Controller{
             }
             $eventData = $event->toArray();
             $eventData['staff'] = array_values($staffGrouped);
-            $eventData['shifts'] = \App\Models\EventShift::where('event_id', $event->id)->orderBy('starts_at')->get();
+            $eventData['shifts'] = EventShift::where('event_id', $event->id)->orderBy('starts_at')->get();
             DB::commit();
             return response()->json($eventData, 201);
         } catch (\Exception $e) {
@@ -214,10 +249,12 @@ class EventController extends Controller{
     {
         try {
             DB::beginTransaction();
-            $data = $request->validated();
+            $data = $this->normalizeEventSchedulePayload($request->validated());
             $staffIds = $data['staff_ids'] ?? null;
             $shifts   = $data['shifts'] ?? null;
             unset($data['staff_ids'], $data['shifts']);
+            $utcTimestamp = Carbon::now('UTC')->format('Y-m-d H:i:s');
+
             $event->update($data);
             if ($staffIds !== null) {
                 // Prendi tutti i record attivi (non soft deleted)
@@ -232,7 +269,7 @@ class EventController extends Controller{
                     EventStaff::create([
                         'event_id' => $event->id,
                         'staff_id' => $staffId,
-                        'added_at' => now(),
+                        'added_at' => $utcTimestamp,
                         'status'   => 'active',
                     ]);
                 }
@@ -243,7 +280,7 @@ class EventController extends Controller{
                         ->whereNull('deleted_at')
                         ->get();
                     foreach ($records as $es) {
-                        $es->removed_at = now();
+                        $es->removed_at = $utcTimestamp;
                         $es->delete();
                         $es->save();
                     }
@@ -251,9 +288,9 @@ class EventController extends Controller{
             }
             // Aggiorna turni (null = non toccare, array = sostituisci tutti)
             if ($shifts !== null) {
-                \App\Models\EventShift::where('event_id', $event->id)->delete();
+                EventShift::where('event_id', $event->id)->delete();
                 foreach ($shifts as $shift) {
-                    \App\Models\EventShift::create([
+                    EventShift::create([
                         'event_id'  => $event->id,
                         'starts_at' => $shift['starts_at'],
                         'ends_at'   => $shift['ends_at'],
@@ -292,7 +329,7 @@ class EventController extends Controller{
             }
             $eventData = $event->toArray();
             $eventData['staff'] = array_values($staffGrouped);
-            $eventData['shifts'] = \App\Models\EventShift::where('event_id', $event->id)->orderBy('starts_at')->get();
+            $eventData['shifts'] = EventShift::where('event_id', $event->id)->orderBy('starts_at')->get();
             DB::commit();
             return response()->json($eventData);
         } catch (\Exception $e) {

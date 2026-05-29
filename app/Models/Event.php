@@ -31,6 +31,11 @@ class Event extends Model
         'location',
     ];
 
+    protected $casts = [
+        'event_start_date' => 'datetime',
+        'event_end_date' => 'datetime',
+    ];
+
     public function shifts()
     {
         return $this->hasMany(EventShift::class)->orderBy('starts_at');

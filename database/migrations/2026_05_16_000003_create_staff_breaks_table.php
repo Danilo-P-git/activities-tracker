@@ -13,7 +13,7 @@ return new class extends Migration
             $table->foreignId('event_staff_id')
                   ->constrained('event_staff')
                   ->cascadeOnDelete();
-            $table->timestamp('started_at');
+            $table->timestamp('started_at')->nullable();
             $table->timestamp('ended_at')->nullable();
             $table->timestamps();
         });

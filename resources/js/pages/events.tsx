@@ -40,6 +40,21 @@ type EventType = {
   shifts?: ShiftType[];
 };
 
+function toLocalDateTimeInput(value?: string | null): string {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mi = String(date.getMinutes()).padStart(2, '0');
+
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+}
+
 // Card evento in evidenza
 function FeaturedEventCard({ event, onEdit, onDelete }: { event: EventType; onEdit: () => void; onDelete: () => void }) {
   if (!event) return null;
@@ -292,13 +307,13 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
       setForm({
         event_name: event.event_name || '',
         description: event.description || '',
-        event_start_date: event.event_start_date ? event.event_start_date.slice(0, 16) : '',
-        event_end_date: event.event_end_date ? event.event_end_date.slice(0, 16) : '',
+        event_start_date: toLocalDateTimeInput(event.event_start_date),
+        event_end_date: toLocalDateTimeInput(event.event_end_date),
         location: event.location || '',
         staff_ids: staffSource ? staffSource.filter(s => s.periods && s.periods.some(p => !p.removed_at && !p.deleted_at)).map(s => s.id) : [],
         shifts: event.shifts ? event.shifts.map(s => ({
-          starts_at: s.starts_at.slice(0, 16),
-          ends_at: s.ends_at.slice(0, 16),
+          starts_at: toLocalDateTimeInput(s.starts_at),
+          ends_at: toLocalDateTimeInput(s.ends_at),
         })) : [],
       });
     } else if (open && !editMode) {

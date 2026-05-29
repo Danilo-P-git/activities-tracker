@@ -12,6 +12,7 @@ use App\Models\Group;
 use App\Models\Staff;
 use App\Models\StaffBreak;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Tag(
@@ -279,19 +280,26 @@ class StaffController extends Controller{
 
         $previousStatus = $record->status;
 
+        $utcTimestamp = Carbon::now('UTC')->format('Y-m-d H:i:s');
+
         // Registra inizio/fine pausa nella tabella staff_breaks
         if ($previousStatus !== 'break' && $status === 'break') {
             // Sta iniziando una pausa
+            Log::info($utcTimestamp);
             StaffBreak::create([
                 'event_staff_id' => $record->id,
-                'started_at'     => Carbon::now(),
+                'started_at'     => $utcTimestamp,
                 'ended_at'       => null,
             ]);
+
         } elseif ($previousStatus === 'break' && $status === 'active') {
             // Sta terminando la pausa: chiude l'eventuale record aperto
+            Log::info($utcTimestamp);
+
             StaffBreak::where('event_staff_id', $record->id)
                 ->whereNull('ended_at')
-                ->update(['ended_at' => Carbon::now()]);
+                ->latest('started_at')
+                ->update(['ended_at' => $utcTimestamp]);
         }
 
         $record->status = $status;
