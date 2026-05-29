@@ -59,6 +59,14 @@ class StaffController extends Controller{
                     ->orderBy('added_at')
                     ->get();
 
+                $completedGroupsByStaff = Group::withTrashed()
+                    ->where('event_id', $eventId)
+                    ->whereNotNull('staff_id')
+                    ->where('is_waiting', false)
+                    ->where('is_closed', true)
+                    ->get()
+                    ->groupBy('staff_id');
+
                 $staffGrouped = [];
 
                 foreach ($staffRecords as $record) {
@@ -113,6 +121,25 @@ class StaffController extends Controller{
                     ->groupBy('staff_id');
                 foreach ($staffGrouped as $sid => &$data) {
                     $data['groups_today'] = isset($groupsToday[$sid]) ? $groupsToday[$sid]->count() : 0;
+
+                    $completedGroups = $completedGroupsByStaff->get($sid, collect());
+
+                    $data['completed_groups_count'] = $completedGroups->count();
+                    $data['completed_activity_seconds'] = (int) $completedGroups->sum(function ($group) {
+                        if ($group->is_friend) {
+                            return 0;
+                        }
+
+                        if ($group->closed_at && $group->activity_started_at) {
+                            return max(0, $group->closed_at->timestamp - $group->activity_started_at->timestamp);
+                        }
+
+                        if (! is_null($group->activity_duration)) {
+                            return $group->activity_duration * 60;
+                        }
+
+                        return 0;
+                    });
                 }
                 unset($data);
 

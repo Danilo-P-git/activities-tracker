@@ -1,14 +1,18 @@
 
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Auth\ApiLoginController;
+use App\Http\Controllers\ConfigurazioneController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\GroupController;
-use App\Http\Controllers\StaffController;
 use App\Http\Controllers\MetricsController;
+use App\Http\Controllers\StaffController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use App\Models\Group;
-use App\Http\Controllers\ConfigurazioneController;
+
+Route::post('/auth/login', [ApiLoginController::class, 'login']);
+Route::post('/auth/logout', [ApiLoginController::class, 'logout']);
 
 Route::get('/configurazione', [ConfigurazioneController::class, 'show']);
 Route::put('/configurazione', [ConfigurazioneController::class, 'update']);
@@ -34,11 +38,8 @@ Route::apiResource('staff', StaffController::class);
 
 
 Route::get('/user', function (Request $request) {
-    dd($request->user());
     return $request->user();
-})->middleware('auth:sanctum');
-Route::middleware('auth:sanctum')->group(function () {
-});
+})->middleware('auth:api');
 
 
 

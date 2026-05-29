@@ -14,6 +14,8 @@ type StaffType = {
   status?: string;
   updated_at?: string | null;
   groups_today?: number;
+  completed_groups_count?: number;
+  completed_activity_seconds?: number;
 };
 
 type GroupType = {
@@ -75,6 +77,30 @@ function isStaffAvailable(value: StaffType['is_available']) {
   return value === true || value === '1' || value === 1;
 }
 
+function formatActivitySummary(staff?: StaffType) {
+  if (!staff) {
+    return '';
+  }
+
+  const completedGroupsCount = staff.completed_groups_count ?? 0;
+  const completedActivitySeconds = staff.completed_activity_seconds ?? 0;
+  const hours = Math.floor(completedActivitySeconds / 3600);
+  const minutes = Math.floor((completedActivitySeconds % 3600) / 60);
+  const durationLabel = hours > 0
+    ? `${hours}h ${minutes.toString().padStart(2, '0')}m`
+    : `${minutes}m`;
+
+  return `${completedGroupsCount} gruppi · ${durationLabel}`;
+}
+
+function getEventStaffData(staffId: number | null, eventStaffList: StaffType[]) {
+  if (staffId === null) {
+    return undefined;
+  }
+
+  return eventStaffList.find((staff) => staff.id === staffId);
+}
+
 
 const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
   const [groups, setGroups] = useState<GroupType[]>([]);
@@ -113,6 +139,16 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
   const [eventClosed, setEventClosed] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  async function refreshEventStaff() {
+    const res = await axios.get(`/api/events/${eventId}/staff`, { withCredentials: true });
+    const refreshedStaff = Array.isArray(res.data) ? res.data : [];
+
+    setEventStaffList(refreshedStaff);
+    setEventStaffIds(refreshedStaff.map((staff: StaffType) => staff.id));
+
+    return refreshedStaff;
+  }
+
   useEffect(() => {
     fetchGroups();
     axios.get(`/api/groups/closed`, { params: { event_id: eventId }, withCredentials: true }).then(res => setClosedGroups(res.data));
@@ -141,7 +177,7 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
       }
     });
     // Recupera staff dell'evento (anche non disponibili) SOLO per la tabella staff evento
-    axios.get(`/api/events/${eventId}/staff`, { withCredentials: true }).then(res => setEventStaffList(res.data));
+    refreshEventStaff();
     // Recupera tutti gli staff (per selezione gruppi)
     axios.get('/api/staff', { withCredentials: true }).then(res => setStaffList(res.data));
     // Recupera configurazione globale
@@ -157,8 +193,7 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
 
   // Polling: aggiorna staff e gruppi ogni 30 secondi per monitoraggio continuo
   useEffect(() => {
-    const pollStaff = () =>
-      axios.get(`/api/events/${eventId}/staff`, { withCredentials: true }).then(res => setEventStaffList(res.data));
+    const pollStaff = () => refreshEventStaff();
     const pollGroups = () =>
       axios.get('/api/groups', { params: { event_id: eventId }, withCredentials: true }).then(res => setGroups(res.data));
     const interval = setInterval(() => {
@@ -314,7 +349,7 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                         onChange={async () => {
                           const newStatus = staff.is_on_break ? 'active' : 'break';
                           await axios.put(`/api/events/${eventId}/staff/${staff.id}/status`, { status: newStatus }, { withCredentials: true });
-                          axios.get(`/api/events/${eventId}/staff`, { withCredentials: true }).then(res => setEventStaffList(res.data));
+                          await refreshEventStaff();
                         }}
                       />
                     </td>
@@ -390,11 +425,15 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
               <label className="block text-sm font-medium mb-1">Staff associato</label>
               <Listbox value={form.staff_id} onChange={handleStaffChange} multiple={false}>
                 <div className="relative mt-1">
-                  <Listbox.Button className="w-full cursor-pointer rounded-lg bg-background border border-border py-2 pl-3 pr-10 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-foreground transition">
+                  <Listbox.Button onClick={() => void refreshEventStaff()} className="w-full cursor-pointer rounded-lg bg-background border border-border py-2 pl-3 pr-10 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-foreground transition">
                     <span className={form.staff_id === null ? 'block truncate text-muted-foreground italic' : 'block truncate'}>
                       {form.staff_id === null
                         ? 'Seleziona staff'
-                        : staffList.find(s => s.id === form.staff_id)?.full_name}
+                        : (() => {
+                            const selectedStaff = getEventStaffData(form.staff_id, eventStaffList) ?? staffList.find(s => s.id === form.staff_id);
+                            const activitySummary = formatActivitySummary(selectedStaff);
+                            return activitySummary ? `${selectedStaff?.full_name} · ${activitySummary}` : selectedStaff?.full_name;
+                          })()}
                     </span>
                     <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
                       <ChevronUpDownIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
@@ -419,12 +458,13 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                       )}
                     </Listbox.Option>
                     {staffList.filter(staff => eventStaffIds.includes(staff.id)).map((staff) => {
-                      const isPresent = eventStaffList.find(es => es.id === staff.id)?.is_currently_present !== false;
-                      const esRecord = eventStaffList.find(es => es.id === staff.id);
+                      const esRecord = getEventStaffData(staff.id, eventStaffList);
+                      const isPresent = esRecord?.is_currently_present !== false;
                       const isOnBreak = esRecord?.is_on_break === true;
                       const breakMinutes = isOnBreak && esRecord?.break_started_at
                         ? Math.floor((Date.now() - new Date(esRecord.break_started_at).getTime()) / 60000)
                         : null;
+                      const activitySummary = formatActivitySummary(esRecord);
                       return (
                         <Listbox.Option
                           key={staff.id}
@@ -441,10 +481,17 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                         >
                           {({ selected }) => (
                             <>
-                              <span className={`block truncate ${selected ? 'font-bold' : ''}`}>
-                                {isOnBreak && <span className="text-orange-400">In pausa{breakMinutes !== null ? ` ${breakMinutes}m` : ''} </span>}
-                                {!isPresent && !isOnBreak && <span className="text-muted-foreground">Assente </span>}
-                                {staff.full_name}
+                              <span className={`block ${selected ? 'font-bold' : ''}`}>
+                                <span className="block truncate">
+                                  {isOnBreak && <span className="text-orange-400">In pausa{breakMinutes !== null ? ` ${breakMinutes}m` : ''} </span>}
+                                  {!isPresent && !isOnBreak && <span className="text-muted-foreground">Assente </span>}
+                                  {staff.full_name}
+                                </span>
+                                {activitySummary && (
+                                  <span className="block truncate text-xs text-muted-foreground">
+                                    Attivita completate: {activitySummary}
+                                  </span>
+                                )}
                               </span>
                               {!isOnBreak && isPresent && selected ? (
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
@@ -482,6 +529,7 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                   staffList={staffList}
                   eventStaffIds={eventStaffIds}
                   eventStaffList={eventStaffList}
+                  refreshEventStaff={refreshEventStaff}
                   fetchGroups={fetchGroups}
                   fetchClosedGroups={() => axios.get(`/api/groups/closed`, { params: { event_id: eventId }, withCredentials: true }).then(res => setClosedGroups(res.data))}
                   eventId={eventId}
@@ -505,6 +553,7 @@ const GroupManager: React.FC<{ eventId: number }> = ({ eventId }) => {
                   staffList={staffList}
                   eventStaffIds={eventStaffIds}
                   eventStaffList={eventStaffList}
+                  refreshEventStaff={refreshEventStaff}
                   fetchGroups={fetchGroups}
                   fetchClosedGroups={() => axios.get(`/api/groups/closed`, { params: { event_id: eventId }, withCredentials: true }).then(res => setClosedGroups(res.data))}
                   eventId={eventId}
@@ -637,11 +686,12 @@ const GroupListItem: React.FC<{
   staffList: StaffType[];
   eventStaffIds: number[];
   eventStaffList: StaffType[];
+  refreshEventStaff: () => Promise<StaffType[]>;
   fetchGroups: () => void;
   fetchClosedGroups: () => void;
   eventId: number;
   eventInfo?: { event_start_date?: string; event_end_date?: string } | null;
-}> = ({ group, staffList, eventStaffIds, eventStaffList, fetchGroups, fetchClosedGroups, eventId, eventInfo }) => {
+}> = ({ group, staffList, eventStaffIds, eventStaffList, refreshEventStaff, fetchGroups, fetchClosedGroups, eventId, eventInfo }) => {
   const showTimer = !group.is_friend && group.activity_duration && group.created_at;
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -668,6 +718,7 @@ const GroupListItem: React.FC<{
   async function handleWaitingToggle() {
     if (group.is_waiting && !group.staff_id) {
       setPickedStaffId(null);
+      await refreshEventStaff();
       setPickStaffOpen(true);
       return;
     }
@@ -784,11 +835,15 @@ const GroupListItem: React.FC<{
               <div className="text-xs text-gray-600 mb-1">{editForm.is_friend ? 'Indefinita' : `${editForm.activity_duration} minuti`}</div>
               <Listbox value={editForm.staff_id} onChange={handleEditStaffChange} multiple={false}>
                 <div className="relative mt-1">
-                  <Listbox.Button className="w-full cursor-pointer rounded-lg bg-background border border-border py-2 pl-3 pr-10 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-foreground transition">
+                  <Listbox.Button onClick={() => void refreshEventStaff()} className="w-full cursor-pointer rounded-lg bg-background border border-border py-2 pl-3 pr-10 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-foreground transition">
                     <span className={editForm.staff_id === null ? 'block truncate text-muted-foreground italic' : 'block truncate'}>
                       {editForm.staff_id === null
                         ? 'Seleziona staff'
-                        : staffList.find(s => s.id === editForm.staff_id)?.full_name}
+                        : (() => {
+                            const selectedStaff = getEventStaffData(editForm.staff_id, eventStaffList) ?? staffList.find(s => s.id === editForm.staff_id);
+                            const activitySummary = formatActivitySummary(selectedStaff);
+                            return activitySummary ? `${selectedStaff?.full_name} · ${activitySummary}` : selectedStaff?.full_name;
+                          })()}
                     </span>
                     <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
                       <ChevronUpDownIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
@@ -813,12 +868,13 @@ const GroupListItem: React.FC<{
                       )}
                     </Listbox.Option>
                     {staffList.filter(staff => eventStaffIds.includes(staff.id)).map((staff) => {
-                      const isPresent = eventStaffList.find(es => es.id === staff.id)?.is_currently_present !== false;
-                      const esRecord = eventStaffList.find(es => es.id === staff.id);
+                      const esRecord = getEventStaffData(staff.id, eventStaffList);
+                      const isPresent = esRecord?.is_currently_present !== false;
                       const isOnBreak = esRecord?.is_on_break === true;
                       const breakMinutes = isOnBreak && esRecord?.break_started_at
                         ? Math.floor((Date.now() - new Date(esRecord.break_started_at).getTime()) / 60000)
                         : null;
+                      const activitySummary = formatActivitySummary(esRecord);
                       return (
                         <Listbox.Option
                           key={staff.id}
@@ -835,10 +891,17 @@ const GroupListItem: React.FC<{
                         >
                           {({ selected }) => (
                             <>
-                              <span className={`block truncate ${selected ? 'font-bold' : ''}`}>
-                                {isOnBreak && <span className="text-orange-400">In pausa{breakMinutes !== null ? ` ${breakMinutes}m` : ''} </span>}
-                                {!isPresent && !isOnBreak && <span className="text-muted-foreground">Assente </span>}
-                                {staff.full_name}
+                              <span className={`block ${selected ? 'font-bold' : ''}`}>
+                                <span className="block truncate">
+                                  {isOnBreak && <span className="text-orange-400">In pausa{breakMinutes !== null ? ` ${breakMinutes}m` : ''} </span>}
+                                  {!isPresent && !isOnBreak && <span className="text-muted-foreground">Assente </span>}
+                                  {staff.full_name}
+                                </span>
+                                {activitySummary && (
+                                  <span className="block truncate text-xs text-muted-foreground">
+                                    Attivita completate: {activitySummary}
+                                  </span>
+                                )}
                               </span>
                               {!isOnBreak && isPresent && selected ? (
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">
@@ -902,7 +965,13 @@ const GroupListItem: React.FC<{
           <button className={`rounded px-2 py-1 text-xs font-bold transition ${group.is_waiting ? 'bg-yellow-200 text-yellow-800 hover:bg-yellow-300' : 'bg-green-200 text-green-800 hover:bg-green-300'}`} onClick={handleWaitingToggle}>
             {group.is_waiting ? 'Attiva gruppo' : 'In attesa'}
           </button>
-          <button className="mt-1 bg-blue-200 hover:bg-blue-300 text-blue-800 rounded px-2 py-1 text-xs font-bold transition" onClick={() => setEditMode(e => !e)}>
+          <button className="mt-1 bg-blue-200 hover:bg-blue-300 text-blue-800 rounded px-2 py-1 text-xs font-bold transition" onClick={async () => {
+            if (!editMode) {
+              await refreshEventStaff();
+            }
+
+            setEditMode(e => !e);
+          }}>
             {editMode ? 'Chiudi Modifica' : 'Modifica'}
           </button>
           <button className="mt-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded px-2 py-1 text-xs font-bold transition" onClick={handleCloseToggle}>
@@ -913,11 +982,11 @@ const GroupListItem: React.FC<{
     </li>
     {pickStaffOpen && (
       <div
-        className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 py-4"
+        className="fixed inset-0 z-50 overflow-y-auto bg-black/50 px-3 py-4 sm:flex sm:items-start sm:justify-center"
         onClick={triggerPickStaffShake}
       >
         <div
-          className={`bg-card border border-border rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 my-auto max-h-[90vh] overflow-y-auto${pickStaffShaking ? ' modal-shake' : ''}`}
+          className={`mx-auto my-auto max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-xl sm:rounded-2xl sm:p-6${pickStaffShaking ? ' modal-shake' : ''}`}
           onClick={e => e.stopPropagation()}
         >
           <h3 className="text-lg font-bold text-primary mb-1">Attiva gruppo</h3>
@@ -927,11 +996,15 @@ const GroupListItem: React.FC<{
           </p>
           <Listbox value={pickedStaffId} onChange={setPickedStaffId}>
             <div className="relative mb-4">
-              <Listbox.Button className="w-full cursor-pointer rounded-lg bg-background border border-border py-2 pl-3 pr-10 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-foreground transition">
+              <Listbox.Button onClick={() => void refreshEventStaff()} className="w-full cursor-pointer rounded-lg bg-background border border-border py-2 pl-3 pr-10 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-foreground transition">
                 <span className={pickedStaffId === null ? 'block truncate text-muted-foreground italic' : 'block truncate'}>
                   {pickedStaffId === null
                     ? 'Seleziona staff...'
-                    : staffList.find(s => s.id === pickedStaffId)?.full_name}
+                    : (() => {
+                        const selectedStaff = getEventStaffData(pickedStaffId, eventStaffList) ?? staffList.find(s => s.id === pickedStaffId);
+                        const activitySummary = formatActivitySummary(selectedStaff);
+                        return activitySummary ? `${selectedStaff?.full_name} · ${activitySummary}` : selectedStaff?.full_name;
+                      })()}
                 </span>
                 <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
                   <ChevronUpDownIcon className="h-5 w-5 text-muted-foreground" />
@@ -941,12 +1014,13 @@ const GroupListItem: React.FC<{
                 {staffList
                   .filter(s => eventStaffIds.includes(s.id))
                   .map(staff => {
-                    const isPresent = eventStaffList.find(es => es.id === staff.id)?.is_currently_present !== false;
-                    const esRecord = eventStaffList.find(es => es.id === staff.id);
+                    const esRecord = getEventStaffData(staff.id, eventStaffList);
+                    const isPresent = esRecord?.is_currently_present !== false;
                     const isOnBreak = esRecord?.is_on_break === true;
                     const breakMinutes = isOnBreak && esRecord?.break_started_at
                       ? Math.floor((Date.now() - new Date(esRecord.break_started_at).getTime()) / 60000)
                       : null;
+                    const activitySummary = formatActivitySummary(esRecord);
                     return (
                       <Listbox.Option
                         key={staff.id}
@@ -963,10 +1037,17 @@ const GroupListItem: React.FC<{
                       >
                         {({ selected }) => (
                           <>
-                            <span className={`block truncate ${selected ? 'font-bold' : ''}`}>
-                              {isOnBreak && <span className="text-orange-400">In pausa{breakMinutes !== null ? ` ${breakMinutes}m` : ''} </span>}
-                              {!isPresent && !isOnBreak && <span className="text-muted-foreground">Assente </span>}
-                              {staff.full_name}
+                            <span className={`block ${selected ? 'font-bold' : ''}`}>
+                              <span className="block truncate">
+                                {isOnBreak && <span className="text-orange-400">In pausa{breakMinutes !== null ? ` ${breakMinutes}m` : ''} </span>}
+                                {!isPresent && !isOnBreak && <span className="text-muted-foreground">Assente </span>}
+                                {staff.full_name}
+                              </span>
+                              {activitySummary && (
+                                <span className="block truncate text-xs text-muted-foreground">
+                                  Attivita completate: {activitySummary}
+                                </span>
+                              )}
                             </span>
                             {!isOnBreak && isPresent && selected ? (
                               <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary">

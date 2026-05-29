@@ -94,13 +94,13 @@ function EventInfoModal({ open, onClose, event, onEdit }: { open: boolean; onClo
     <Transition show={open} as={React.Fragment}>
       <Dialog as="div" className="relative z-50" onClose={triggerShake}>
         <div className="fixed inset-0 bg-black/40 z-40" />
-        <div className="fixed inset-0 flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto px-3 py-4 sm:flex sm:items-center sm:justify-center sm:p-4">
           <Transition.Child
             as={React.Fragment}
             enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
             leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
           >
-            <Dialog.Panel className={`bg-card rounded-2xl p-8 w-[75vw] shadow-xl relative border border-border my-auto overflow-y-auto max-h-[90vh]${shaking ? ' modal-shake' : ''}`}>
+            <Dialog.Panel className={`relative mx-auto w-full max-w-4xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-xl max-h-[92vh] sm:my-auto sm:rounded-2xl sm:p-8${shaking ? ' modal-shake' : ''}`}>
               <button className="absolute top-3 right-3 text-muted-foreground hover:text-primary text-2xl" onClick={onClose}>&times;</button>
               <Dialog.Title className="text-2xl font-bold mb-4 text-primary">{event.event_name}</Dialog.Title>
               <div className="text-base text-muted-foreground mb-4">{event.description}</div>
@@ -197,7 +197,7 @@ function EventInfoModal({ open, onClose, event, onEdit }: { open: boolean; onClo
                   const col1 = staff.slice(0, 10);
                   const col2 = staff.slice(10);
                   return (
-                    <div className={`flex gap-3 ${col2.length > 0 ? 'flex-row' : ''}`}>
+                    <div className={`flex flex-col gap-3 ${col2.length > 0 ? 'xl:flex-row' : ''}`}>
                       <div className="flex-1 overflow-x-auto rounded-lg border border-border">
                         <table className="w-full text-xs">{thead}<tbody>{renderRows(col1)}</tbody></table>
                       </div>
@@ -389,13 +389,13 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
     <Transition show={open} as={React.Fragment}>
       <Dialog as="div" className="relative z-50" onClose={triggerShake}>
         <div className="fixed inset-0 bg-black/40" />
-        <div className="fixed inset-0 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 overflow-y-auto px-3 py-4 sm:flex sm:items-center sm:justify-center sm:p-4">
           <Transition.Child
             as={React.Fragment}
             enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
             leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
           >
-            <Dialog.Panel className={`bg-card rounded-2xl p-8 w-[75vw] shadow-xl relative border border-border my-auto overflow-y-auto max-h-[90vh]${shaking ? ' modal-shake' : ''}`}>
+            <Dialog.Panel className={`relative mx-auto w-full max-w-4xl overflow-y-auto rounded-xl border border-border bg-card p-4 shadow-xl max-h-[92vh] sm:my-auto sm:rounded-2xl sm:p-8${shaking ? ' modal-shake' : ''}`}>
               <button className="absolute top-3 right-3 text-muted-foreground hover:text-primary text-2xl" onClick={onClose}>&times;</button>
               <Dialog.Title className="text-2xl font-bold mb-4 text-primary">{editMode ? 'Modifica Evento' : 'Apri evento'}</Dialog.Title>
               {error && <div className="mb-2 text-accent text-sm">{error}</div>}
@@ -476,25 +476,25 @@ function AddEventModal({ open, onClose, onAdd, event, editMode, staffOverride }:
                   )}
                   <div className="flex flex-col gap-1.5">
                     {form.shifts.map((shift, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 border border-border rounded-lg px-2 py-1.5">
+                      <div key={idx} className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border px-2 py-1.5 sm:flex-nowrap">
                         <input
                           type="date"
                           value={shift.starts_at.slice(0, 10)}
                           onChange={e => updateShiftDate(idx, e.target.value)}
-                          className="border border-border bg-background text-foreground rounded px-1.5 py-1 text-sm focus:ring-1 focus:ring-secondary focus:outline-none min-w-0"
+                          className="min-w-0 w-full rounded border border-border bg-background px-1.5 py-1 text-sm text-foreground focus:ring-1 focus:ring-secondary focus:outline-none sm:w-auto"
                         />
                         <input
                           type="time"
                           value={shift.starts_at.slice(11, 16)}
                           onChange={e => updateShift(idx, 'starts_at', `${shift.starts_at.slice(0, 10)}T${e.target.value}`)}
-                          className="border border-border bg-background text-foreground rounded px-1.5 py-1 text-sm focus:ring-1 focus:ring-secondary focus:outline-none w-[5.5rem]"
+                          className="w-full rounded border border-border bg-background px-1.5 py-1 text-sm text-foreground focus:ring-1 focus:ring-secondary focus:outline-none sm:w-[5.5rem]"
                         />
                         <span className="text-muted-foreground text-xs shrink-0">→</span>
                         <input
                           type="time"
                           value={shift.ends_at.slice(11, 16)}
                           onChange={e => updateShift(idx, 'ends_at', `${shift.ends_at.slice(0, 10)}T${e.target.value}`)}
-                          className="border border-border bg-background text-foreground rounded px-1.5 py-1 text-sm focus:ring-1 focus:ring-secondary focus:outline-none w-[5.5rem]"
+                          className="w-full rounded border border-border bg-background px-1.5 py-1 text-sm text-foreground focus:ring-1 focus:ring-secondary focus:outline-none sm:w-[5.5rem]"
                         />
                         <button type="button" onClick={() => removeShift(idx)} className="ml-auto text-red-500 hover:text-red-700 font-bold text-base leading-none shrink-0 pl-1">
                           &times;

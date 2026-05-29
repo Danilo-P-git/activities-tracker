@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticateFromJwtCookie;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -15,12 +16,20 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+        $middleware->encryptCookies(except: ['appearance', 'sidebar_state', 'jwt_token']);
+
+        $middleware->web(prepend: [
+            AuthenticateFromJwtCookie::class,
+        ]);
 
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+        ]);
+
+        $middleware->api(prepend: [
+            AuthenticateFromJwtCookie::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -1,6 +1,6 @@
 // Components
 import EmailVerificationNotificationController from '@/actions/App/Http/Controllers/Auth/EmailVerificationNotificationController';
-import { logout } from '@/routes';
+import { logoutWithJwt } from '@/lib/jwt-auth';
 import { Form, Head } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
 
@@ -9,6 +9,11 @@ import { Button } from '@/components/ui/button';
 import AuthLayout from '@/layouts/auth-layout';
 
 export default function VerifyEmail({ status }: { status?: string }) {
+    const handleLogout = async () => {
+        await logoutWithJwt();
+        window.location.href = '/login';
+    };
+
     return (
         <AuthLayout
             title="Verify email"
@@ -36,12 +41,13 @@ export default function VerifyEmail({ status }: { status?: string }) {
                             Resend verification email
                         </Button>
 
-                        <TextLink
-                            href={logout()}
-                            className="mx-auto block text-sm"
+                        <button
+                            type="button"
+                            onClick={handleLogout}
+                            className="mx-auto block text-sm text-primary underline-offset-4 hover:underline"
                         >
                             Log out
-                        </TextLink>
+                        </button>
                     </>
                 )}
             </Form>
